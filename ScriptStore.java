@@ -72,7 +72,9 @@ public class ScriptStore {
                 }
             }
             if (myTurn){//this executes once it is not possibly a character --- this means it is a continuation of the last line, if it is your turn, keep printing it out as part of the line.
-                myLines.add(line.strip());
+                int lastIndex = myLines.size() - 1;
+                String lastLine = myLines.getLast();
+                myLines.set(lastIndex,lastLine + " " + line.strip());
             }
         }
         System.out.println(characterName + " has " + lineCount + " lines.\nHere they are:");
