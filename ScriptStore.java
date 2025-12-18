@@ -1,6 +1,8 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.Scanner;
+import java.util.List;
+import java.util.ArrayList;
 
 public class ScriptStore {
     public static String useableScript = "";
@@ -29,8 +31,7 @@ public class ScriptStore {
         Scanner characterScan = new Scanner(System.in);
         System.out.println("Enter the name of your character: ");
         String characterName = characterScan.nextLine().trim().toUpperCase();
-        
-        String myLines = "";
+        List <String> myLines = new ArrayList<>();
         int lineCount = 0;
         boolean myTurn = false;
 
@@ -65,16 +66,18 @@ public class ScriptStore {
                     String spoken = line.substring(colon + 1).strip(); //spoken line is the substring after the colon, stripped of superfluous things
                     if (myTurn && !spoken.isEmpty()){ //if it is my turn, and there is a line
                         lineCount++; //add to the running count
-                        myLines += spoken + "\n"; //add the lines to my lines then add a break
+                        myLines.add(spoken); //add the lines to my lines then add a break
                     }
                     continue;
                 }
             }
             if (myTurn){//this executes once it is not possibly a character --- this means it is a continuation of the last line, if it is your turn, keep printing it out as part of the line.
-                myLines += line.strip() + "\n";
+                myLines.add(line.strip());
             }
         }
         System.out.println(characterName + " has " + lineCount + " lines.\nHere they are:");
-        System.out.println(myLines);
+        for(String myLine : myLines){
+            System.out.println(myLine);
     }
+}
 }
