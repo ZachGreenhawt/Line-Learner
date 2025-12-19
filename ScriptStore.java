@@ -27,14 +27,17 @@ public class ScriptStore {
         return useableScript; //return to string
     }
 
-    public static void lineCounter(String[] args){
+    public static void lineProcessor(String[] args){
         Scanner characterScan = new Scanner(System.in);
         System.out.println("Enter the name of your character: ");
         String characterName = characterScan.nextLine().trim().toUpperCase();
         List <String> myLines = new ArrayList<>();
+        List <String> cueLines = new ArrayList<>();
         int lineCount = 0;
+        int cueCount = -1;
+        int cueIndex = 0;
         boolean myTurn = false;
-
+        cueLines.add("**"+ characterName + " STARTS THE SCENE**");
         String[] lines = useableScript.split("\n"); //break each line down
         for (String raw : lines){ //assign raw  to each line in lines
             String line = raw.strip(); //now we take our raw lines and we strip them of superfluous things
@@ -65,8 +68,18 @@ public class ScriptStore {
                     myTurn = name.strip().equals(characterName); //then check and see if it is the character name, myTurn is true if it = characterName
                     String spoken = line.substring(colon + 1).strip(); //spoken line is the substring after the colon, stripped of superfluous things
                     if (myTurn && !spoken.isEmpty()){ //if it is my turn, and there is a line
+                        cueCount = 0;
                         lineCount++; //add to the running count
                         myLines.add(spoken); //add the lines to my lines then add a break
+                    } else if (!myTurn && !spoken.isEmpty()){
+                        if (cueCount == 0){
+                        cueIndex++;
+                        cueLines.add("");
+                        cueLines.set(cueIndex, line);
+                        cueCount = -1;
+                        } else{
+                            cueLines.set(cueIndex, line);
+                        }
                     }
                     continue;
                 }
@@ -75,11 +88,20 @@ public class ScriptStore {
                 int lastIndex = myLines.size() - 1;
                 String lastLine = myLines.getLast();
                 myLines.set(lastIndex,lastLine + " " + line.strip()); //append to last line
+            } else{
+                int lastIndex = cueLines.size() - 1;
+                String lastLine = cueLines.getLast();
+                cueLines.set(lastIndex, lastLine + " " + line.strip());
             }
         }
+        cueLines.remove((cueLines.size() - 1));
         System.out.println(characterName + " has " + lineCount + " lines.\nHere they are:");
         for(String myLine : myLines){
             System.out.println(myLine);
-    }
+        }
+        System.out.println(characterName + "'s cue lines are: ");
+        for(String cueLine : cueLines){
+            System.out.println(cueLine);
+        }
 }
 }
