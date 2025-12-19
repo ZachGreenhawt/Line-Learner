@@ -7,7 +7,7 @@ Line-Learner is a Java rehearsal tool that helps actors memorize lines by practi
 - Prompts for a character name
 - Builds cue --> response pairs (cue line + your line)
 - Runs an interactive practice session and tracks progress
-- Clean data model: parsing outputs are encapsulated in a `ParsedScript` object
+- Clean data model: parsing outputs are encapsulated into a `ParsedScript` object
 
 ## How it works
 1. `ScriptStore` reads the script and parses dialogue into aligned lists:
@@ -23,10 +23,23 @@ Line-Learner is a Java rehearsal tool that helps actors memorize lines by practi
 - `PracticeSession.java` – interactive rehearsal loop
 - `Example-Scripts/` – sample scripts for testing and demos
 
-## Script format (v0)
+## Script format (v0.5)
 This version expects character dialogue lines in a format like:
 
 CHARACTER: spoken text here
+(stage directions are ignored)
+Continuation lines (non-character lines) are treated as part of the current speaker’s line.
+
+OR
+
+CHARACTER. Spoken text here
+(stage directions are ignored)
+Continuation lines (non-character lines) are treated as part of the current speaker’s line.
+
+OR
+
+CHARACTER
+Spoken text here
 (stage directions are ignored)
 Continuation lines (non-character lines) are treated as part of the current speaker’s line.
 
