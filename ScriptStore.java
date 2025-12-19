@@ -53,12 +53,12 @@ private static String useableScript = "";
                 }
             }
             int colon = -1;
-            boolean hasNext = (i + 1 < lines.length);
+            boolean hasNext = (i + 1 < lines.length); //is there a next line?
             String nextLine;
             if(hasNext){
-                nextLine =lines[i + 1].strip();
+                nextLine =lines[i + 1].strip(); //if yes, this is the next
             }  else{
-               nextLine = "";
+               nextLine = ""; 
             } //Prevent out of bounds
             boolean nameOnOwnLine = (hasNext) && (raw.length() <= 15) && (line.equals(line.toUpperCase()))  && (!nextLine.isEmpty()) && (!nextLine.equals(nextLine.toUpperCase()));
 
@@ -89,27 +89,27 @@ private static String useableScript = "";
                 if (caps && hasLetter){ //if the above is true (if the word is a character name)
                     String spoken;
                     if (nameOnOwnLine) {
-                        if(nextLine.indexOf("(") != 0){
+                        if(nextLine.indexOf("(") != 0){ //if it doesn't start wiuth a stage direction, next line is dialogue
                             spoken = nextLine;
-                        } else{
+                        } else{ //if dialogue starts with parenthetical, strip the line of that
                             String newNextLine = nextLine.substring(0, nextLine.indexOf("("));
                             newNextLine += nextLine.substring(nextLine.indexOf(")", nextLine.indexOf("(")) + 1);
                             spoken = newNextLine.strip();
                         }
                         
                     } else {
-                        spoken = line.substring(colon + 1).strip();
+                        spoken = line.substring(colon + 1).strip(); //normal case
                     }
-                    myTurn = name.strip().equals(characterName); 
+                    myTurn = name.strip().equals(characterName);  //check if it is truly your turn
 
-                    if (myTurn && !spoken.isEmpty()) {
+                    if (myTurn && !spoken.isEmpty()) { //when my turn, add the cue line, add your spoken line; ensures cueLines.size() == myLines.size()
                         cueLines.add(currentCue);
                         myLines.add(spoken);
                     } else if (!myTurn && !spoken.isEmpty()) {
-                        currentCue = line;
+                        currentCue = line; //update cue line -- if your line is after this, this line becomes your cue -- keep updating this value.
                     }
                     if (nameOnOwnLine) {
-                        i++;
+                        i++; //if the name is on the line above, move to the next line
                     }
                     continue;
                 }
