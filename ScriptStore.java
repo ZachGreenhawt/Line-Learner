@@ -89,7 +89,14 @@ private static String useableScript = "";
                 if (caps && hasLetter){ //if the above is true (if the word is a character name)
                     String spoken;
                     if (nameOnOwnLine) {
-                        spoken = nextLine;
+                        if(nextLine.indexOf("(") != 0){
+                            spoken = nextLine;
+                        } else{
+                            String newNextLine = nextLine.substring(0, nextLine.indexOf("("));
+                            newNextLine += nextLine.substring(nextLine.indexOf(")", nextLine.indexOf("(")) + 1);
+                            spoken = newNextLine.strip();
+                        }
+                        
                     } else {
                         spoken = line.substring(colon + 1).strip();
                     }
