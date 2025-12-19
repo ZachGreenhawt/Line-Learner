@@ -5,7 +5,8 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class ScriptStore {
-    public static String useableScript = "";
+private static String useableScript = "";
+public static char[] lineProcessor;
     public static String scriptToRead(String[] args) {
         Scanner input = new Scanner(System.in); //new scanner for input
         StringBuilder processedScript = new StringBuilder();//init processedScript; string builder
@@ -27,7 +28,7 @@ public class ScriptStore {
         return useableScript; //return to string
     }
 
-    public static void lineProcessor(String[] args){
+    public static ParsedScript lineProcessor(String[] args){
         Scanner characterScan = new Scanner(System.in);
         System.out.println("Enter the name of your character: ");
         String characterName = characterScan.nextLine().trim().toUpperCase();
@@ -95,13 +96,6 @@ public class ScriptStore {
             }
         }
         cueLines.remove((cueLines.size() - 1));
-        System.out.println(characterName + " has " + lineCount + " lines.\nHere they are:");
-        for(String myLine : myLines){
-            System.out.println(myLine);
-        }
-        System.out.println(characterName + "'s cue lines are: ");
-        for(String cueLine : cueLines){
-            System.out.println(cueLine);
-        }
+        return new ParsedScript(characterName, cueLines, myLines);
 }
 }
