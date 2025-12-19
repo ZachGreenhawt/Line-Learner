@@ -6,7 +6,6 @@ import java.util.ArrayList;
 
 public class ScriptStore {
 private static String useableScript = "";
-public static char[] lineProcessor;
     public static String scriptToRead(String[] args) {
         Scanner input = new Scanner(System.in); //new scanner for input
         StringBuilder processedScript = new StringBuilder();//init processedScript; string builder
@@ -34,29 +33,51 @@ public static char[] lineProcessor;
         String characterName = characterScan.nextLine().trim().toUpperCase();
         List <String> myLines = new ArrayList<>();
         List <String> cueLines = new ArrayList<>();
-        int lineCount = 0;
-        int cueCount = -1;
-        int cueIndex = 0;
+        String currentCue = "**" + characterName + " STARTS THE SCENE**";
         boolean myTurn = false;
-        cueLines.add("**"+ characterName + " STARTS THE SCENE**");
         String[] lines = useableScript.split("\n"); //break each line down
-        for (String raw : lines){ //assign raw  to each line in lines
+        for (int i = 0; i <lines.length; i++){
+            String raw = lines[i]; //assign raw  to each line in lines
             String line = raw.strip(); //now we take our raw lines and we strip them of superfluous things
             if (line.isEmpty())
                 continue;//continue past empty lines
             if (line.startsWith("(")){
-                myTurn = false;
                 continue;
             }
-            int colon = line.indexOf(":");//find the colons for each line
-            boolean posChar = (colon > 0 && colon <= 15);//possible character must not be after the colon and must be less than or greater than 15 away from :
+            if (line.indexOf("(") != -1){
+                String newLine = line.substring(0, line.indexOf("("));
+                newLine += line.substring(line.indexOf(")", line.indexOf("(")) + 1);
+                line = newLine.strip();
+                if (line.isEmpty()){
+                    continue;
+                }
+            }
+            int colon = -1;
+            boolean hasNext = (i + 1 < lines.length);
+            String nextLine;
+            if(hasNext){
+                nextLine =lines[i + 1].strip();
+            }  else{
+               nextLine = "";
+            } //Prevent out of bounds
+            boolean nameOnOwnLine = (hasNext) && (raw.length() <= 15) && (line.equals(line.toUpperCase()))  && (!nextLine.isEmpty()) && (!nextLine.equals(nextLine.toUpperCase()));
+
+            if (nameOnOwnLine) {
+                colon = raw.length(); // treat the whole line as the name
+            } else {
+                colon = line.indexOf(":");
+                if (colon == -1) {
+                    colon = line.indexOf(".");
+                }
+            }
+            boolean posChar = (colon > 0 && colon <= 15);
             if (posChar){ //if above is true
                 String name = line.substring(0, colon); //the name is from 0 to the colon
                 //we don't scan at the beginning of each line because some characters might have lines that flow onto the next
                 boolean hasLetter = false;
                 boolean caps = true; //must be all caps and must have a letter
-                for (int i = 0; i < name.length(); i++){ //from 0 to the length of the name
-                    char k = name.charAt(i); //character of k is whatever character we are at
+                for (int j = 0; j < name.length(); j++){ //from 0 to the length of the name
+                    char k = name.charAt(j); //character of k is whatever character we are at
                     if (Character.isLetter(k)){
                         hasLetter = true; //must be a letter
                         if (!Character.isUpperCase(k)){
@@ -66,36 +87,38 @@ public static char[] lineProcessor;
                     }
                 }
                 if (caps && hasLetter){ //if the above is true (if the word is a character name)
-                    myTurn = name.strip().equals(characterName); //then check and see if it is the character name, myTurn is true if it = characterName
-                    String spoken = line.substring(colon + 1).strip(); //spoken line is the substring after the colon, stripped of superfluous things
-                    if (myTurn && !spoken.isEmpty()){ //if it is my turn, and there is a line
-                        cueCount = 0;
-                        lineCount++; //add to the running count
-                        myLines.add(spoken); //add the lines to my lines then add a break
-                    } else if (!myTurn && !spoken.isEmpty()){
-                        if (cueCount == 0){
-                        cueIndex++;
-                        cueLines.add("");
-                        cueLines.set(cueIndex, line);
-                        cueCount = -1;
-                        } else{
-                            cueLines.set(cueIndex, line);
-                        }
+                    String spoken;
+                    if (nameOnOwnLine) {
+                        spoken = nextLine;
+                    } else {
+                        spoken = line.substring(colon + 1).strip();
+                    }
+                    myTurn = name.strip().equals(characterName); 
+
+                    if (myTurn && !spoken.isEmpty()) {
+                        cueLines.add(currentCue);
+                        myLines.add(spoken);
+                    } else if (!myTurn && !spoken.isEmpty()) {
+                        currentCue = line;
+                    }
+                    if (nameOnOwnLine) {
+                        i++;
                     }
                     continue;
                 }
             }
-            if (myTurn){//this executes once it is not possibly a character --- this means it is a continuation of the last line, if it is your turn, keep printing it out as part of the line.
-                int lastIndex = myLines.size() - 1;
-                String lastLine = myLines.getLast();
-                myLines.set(lastIndex,lastLine + " " + line.strip()); //append to last line
-            } else{
-                int lastIndex = cueLines.size() - 1;
-                String lastLine = cueLines.getLast();
-                cueLines.set(lastIndex, lastLine + " " + line.strip());
+            if (myTurn) {
+                if (!myLines.isEmpty()) {
+                    int lastIndex = myLines.size() - 1;
+                    String lastLine = myLines.get(lastIndex);
+                    myLines.set(lastIndex, lastLine + " " + line.strip());
+                }
+            } else {
+                if (currentCue != null && !currentCue.isEmpty()) {
+                    currentCue = currentCue + " " + line.strip();
+                }
             }
         }
-        cueLines.remove((cueLines.size() - 1));
         return new ParsedScript(characterName, cueLines, myLines);
-}
+} 
 }

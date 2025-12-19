@@ -15,6 +15,7 @@ public class PracticeSession {
             else{
                 w++;
                 System.out.println("You are wrong!");
+                System.out.println("The correct line was: " + parsed.getCharLine(i));
             }
         }
         System.out.println("You got " + r + " lines correct!");
