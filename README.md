@@ -66,4 +66,4 @@ Continuation lines (non-character lines) are treated as part of the current spea
 As a theatre student, I have always wanted a tool that focuses on the hardest part of memorization: Hearing the cue and delivering the correct line under pressure. This project is also a way to practice clean software design.
 
 ## Notes
-Scripts will commonly contain sensitive material; this is why Line-Learner runs locally and does not upload scripts anywhere. 
+Scripts will commonly contain sensitive material; Line-Learner runs locally and does not upload scripts anywhere. 
