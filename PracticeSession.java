@@ -61,7 +61,11 @@ public class PracticeSession {
         //Show session stats
         System.out.println("You got " + r + " lines correct!");
         System.out.println("You got " + w + " lines wrong!");
-        System.out.println("That means you had an accuracy of " + (int) (100 * ((double) r / (r + w))) + "%");
+        if(r + w == 0){
+            System.out.println("There were no lines!");
+        }else{
+            System.out.println("That means you had an accuracy of " + (int) (100 * ((double) r / (r + w))) + "%");
+        }
         if (timed) {
             long sessionElapsedMs = System.currentTimeMillis() - sessionStartMs;
             System.out.println("Total session time: " + (sessionElapsedMs / 1000.0) + "s");
