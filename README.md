@@ -10,17 +10,20 @@ Line-Learner is a Java rehearsal tool that helps actors memorize lines by practi
 - Clean data model: parsing outputs are encapsulated into a `ParsedScript` object
 
 ## How it works
-1. `ScriptStore` reads the script and parses dialogue into aligned lists:
+1. `ScriptToString` reads the script 
+2. `ScriptParser.java` parses dialogue into aligned lists:
    - `cueLines[i]` = the cue before line `i`
    - `charLines[i]` = your character’s expected line `i`
-2. The parsed results are packaged into a `ParsedScript` object to keep parsing separate from practice logic.
-3. `PracticeSession` iterates through `ParsedScript` and prompts the user to type each line.
+3. The parsed results are packaged into a `ParsedScript` object to keep parsing separate from practice logic.
+4. `PracticeSession` iterates through `ParsedScript` and prompts the user to type each line based on input from `Settings.java`.
 
 ## Project structure
 - `Main.java` – program entry point (loads script, starts practice)
-- `ScriptStore.java` – file reading + parsing
+- `ScriptToString.java` – file reading
 - `ParsedScript.java` – container for parsed cue/line pairs (encapsulation)
+- `ScriptParser.java` – script parser
 - `PracticeSession.java` – interactive rehearsal loop
+- `Settings.java`- interactive settings menu
 - `Example-Scripts/` – sample scripts for testing and demos
 
 ## Script format (v0.5)
