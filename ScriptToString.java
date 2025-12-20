@@ -3,7 +3,6 @@ import java.io.FileNotFoundException;
 import java.util.Scanner;
 
 public class ScriptToString {
-private static String useableScript = "";
     public static String scriptToRead(Scanner sc) {
         StringBuilder processedScript = new StringBuilder();//init processedScript; string builder
         System.out.println("Please enter to number that corresponds with your file extension:\n[1] .txt\n*note that the default is .txt; if there is an error, program will default to .txt*");
@@ -27,10 +26,6 @@ private static String useableScript = "";
             System.out.println("Could not find file: " + script.getName());
             return "";
         }
-        useableScript = processedScript.toString();
-        return useableScript; //return to string
+        return processedScript.toString();
     }
-public static String getUseableScript(){
-    return useableScript;
-}
 }
