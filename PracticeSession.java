@@ -3,17 +3,20 @@ public class PracticeSession {
     public static void run(ParsedScript parsed, Settings settings){
         boolean caseSensitive = settings.caseSensitive();
         boolean punctuation = settings.punctuation();
+        boolean timed = settings.timedMode();
         Scanner lineReader = new Scanner(System.in);
         int r = 0;
         int w = 0;
-        long sessionStartMs = System.currentTimeMillis();
+        long sessionStartMs = timed ? System.currentTimeMillis() : 0;
         for (int i = 0; i < parsed.size(); i++){
-            long lineStartMs = System.currentTimeMillis();
+            long lineStartMs = timed ? System.currentTimeMillis() : 0;
             System.out.println("Cue line: " + parsed.getCue(i));
             System.out.println( "[" + (i+1) + "/" + parsed.size() + "] What is your line?");
             String answer = lineReader.nextLine();
-            long lineElapsedMs = System.currentTimeMillis() - lineStartMs;
-            System.out.println("Time for this line: " + (lineElapsedMs / 1000.0) + "s");
+            if (timed) {
+                long lineElapsedMs = System.currentTimeMillis() - lineStartMs;
+                System.out.println("Time for this line: " + (lineElapsedMs / 1000.0) + "s");
+            }
             String expected = parsed.getCharLine(i);
             answer = caseSensitive ? answer : answer.toLowerCase();
             expected = caseSensitive ? expected : expected.toLowerCase();
@@ -32,7 +35,9 @@ public class PracticeSession {
         System.out.println("You got " + r + " lines correct!");
         System.out.println("You got " + w + " lines wrong!");
         System.out.println("That means you had an accuracy of " + (int) (100 * ((double) r / (r + w))) + "%");
-        long sessionElapsedMs = System.currentTimeMillis() - sessionStartMs;
-        System.out.println("Total session time: " + (sessionElapsedMs / 1000.0) + "s");
+        if (timed) {
+            long sessionElapsedMs = System.currentTimeMillis() - sessionStartMs;
+            System.out.println("Total session time: " + (sessionElapsedMs / 1000.0) + "s");
+        }
     }
 }
