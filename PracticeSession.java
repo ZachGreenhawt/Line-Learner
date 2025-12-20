@@ -7,7 +7,7 @@ public class PracticeSession {
     private static List <String> wrongCues = new ArrayList<>();
     private static List <String> wrongLines2 = new ArrayList<>();
     private static List <String> wrongCues2 = new ArrayList<>();
-    public static void run(ParsedScript parsed, Settings settings){
+    public static void run(ParsedScript parsed, Settings settings, Scanner sc){
         //Clear lists at start of replay loop so we can start tracking agin
         wrongLines.clear();
         wrongCues.clear();
@@ -19,7 +19,6 @@ public class PracticeSession {
         boolean caseSensitive = settings.caseSensitive();
         boolean punctuation = settings.punctuation();
         boolean timed = settings.timedMode();
-        Scanner lineReader = new Scanner(System.in);
         //Counters for right/wrong
         int r = 0;
         int w = 0;
@@ -33,7 +32,7 @@ public class PracticeSession {
             System.out.println("Cue line: " + parsed.getCue(i));
             System.out.println( "[" + (i+1) + "/" + parsed.size() + "] What is your line?");
             //Ask for line input
-            String answer = lineReader.nextLine();
+            String answer = sc.nextLine();
             if (timed) { //Timer math
                 long lineElapsedMs = System.currentTimeMillis() - lineStartMs;
                 System.out.println("Time for this line: " + (lineElapsedMs / 1000.0) + "s");
@@ -68,12 +67,11 @@ public class PracticeSession {
             System.out.println("Total session time: " + (sessionElapsedMs / 1000.0) + "s");
         }
     }
-    public static void retryWrong(Settings settings){
+    public static void retryWrong(Settings settings, Scanner sc){
         //Import settings
         boolean caseSensitive = settings.caseSensitive();
         boolean punctuation = settings.punctuation();
         boolean timed = settings.timedMode();
-        Scanner lineReader = new Scanner(System.in);
         //Right and Wrong counters
         int r = 0;
         int w = 0;
@@ -83,7 +81,7 @@ public class PracticeSession {
             long lineStartMs = timed ? System.currentTimeMillis() : 0;
             System.out.println("Cue line: " + wrongCues.get(i));
             System.out.println( "[" + (i+1) + "/" + wrongLines.size() + "] What is your line?");
-            String answer = lineReader.nextLine();
+            String answer = sc.nextLine();
             if (timed) {
                 long lineElapsedMs = System.currentTimeMillis() - lineStartMs;
                 System.out.println("Time for this line: " + (lineElapsedMs / 1000.0) + "s");
@@ -123,18 +121,17 @@ public class PracticeSession {
         wrongLines2.clear();
         wrongCues2.clear();
     }
-    public static void postPracticeMenu(ParsedScript parsed, Settings settings) {
-        Scanner postMenuScanner = new Scanner(System.in);
+    public static void postPracticeMenu(ParsedScript parsed, Settings settings, Scanner sc) {
         while (true) {
             System.out.println("Would you like to: [1] Try again, [2] Retry only missed lines, or [3] Quit?");
-            String postChoice = postMenuScanner.nextLine().trim();
+            String postChoice = sc.nextLine().trim();
             if (postChoice.equals("1")) {
-                run(parsed, settings);
+                run(parsed, settings, sc);
             } else if (postChoice.equals("2")) {
                 if (wrongLines.isEmpty()) {
                     System.out.println("No missed lines to retry.");
                 } else {
-                    retryWrong(settings);
+                    retryWrong(settings, sc);
                 }
             } else if (postChoice.equals("3")) {
                 return;

@@ -15,29 +15,28 @@ public class Settings {
         this.timedMode = timedMode;
     }
 
-    public static Settings menu() {
-        Scanner settingScanner = new Scanner(System.in);
+    public static Settings menu(Scanner sc) {
 
         System.out.println("Please Select Your Settings:");
 
         //Stage direction setting
         System.out.println("Include stage directions in cue lines? (yes/no)");
-        String stageDirInput = settingScanner.next().trim();
+        String stageDirInput = sc.nextLine().trim();
         boolean includeStageDirectionsInCue = stageDirInput.equalsIgnoreCase("yes") ? true : false;
 
         //Case sensitivity setting
         System.out.println("Case sensitivity: type 1 for case-insensitive, 2 for case-sensitive");
-        String caseSensitivityInput = settingScanner.next().trim();
+        String caseSensitivityInput = sc.nextLine().trim();
         boolean caseSensitive = caseSensitivityInput.equals("2") ? true : false;
 
         //Punctuation setting
         System.out.println("Keep punctuation in responses? (yes/no)");
-        String punctuationInput = settingScanner.next().trim();
+        String punctuationInput = sc.nextLine().trim();
         boolean Punctuation = punctuationInput.equalsIgnoreCase("yes") ? true : false;
 
         //Timer setting
         System.out.println("Timed mode? (yes/no)");
-        String timerInput = settingScanner.next().trim();
+        String timerInput = sc.nextLine().trim();
         boolean timedMode = timerInput.equalsIgnoreCase("yes") ? true : false;
 
         return new Settings(includeStageDirectionsInCue, caseSensitive, Punctuation, timedMode);
