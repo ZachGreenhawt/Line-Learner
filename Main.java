@@ -4,5 +4,6 @@ public class Main {
         ScriptToString.scriptToRead(args);
         ParsedScript parsed = ScriptParser.lineProcessor(args, settings);
         PracticeSession.run(parsed, settings);
+        PracticeSession.postPracticeMenu(parsed, settings);
     }
 }
