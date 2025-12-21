@@ -1,69 +1,97 @@
 # Line-Learner
 
-Line-Learner is a Java rehearsal tool that helps actors memorize lines by practicing **cue pickup** (the line before yours) and checking **accuracy** (typing your line exactly). It parses a script, extracts your character’s lines, pairs each one with the most recent cue line, and runs an interactive practice session in the terminal.
+**Line-Learner** is a Java rehearsal tool that helps actors memorize lines by practicing **cue pickup** (the line before yours) and checking **accuracy** (typing your line). It parses a script, extracts your character’s lines, pairs each one with the most recent cue line, and runs an interactive practice session in the terminal.
 
-## Features (current)
-- Loads a script from a local file
-- Prompts for a character name
-- Builds cue --> response pairs (cue line + your line)
-- Runs an interactive practice session and tracks progress
-- Clean data model: parsing outputs are encapsulated into a `ParsedScript` object
+## What it does
+- Loads a script from a local `.txt` or `.txt` file (from `Example-Scripts/`)
+- Prompts for **settings** and a **character name**
+- Parses the script into aligned **cue → response** pairs
+- Runs an interactive practice session and shows accuracy
+- Offers a post-practice menu:
+  - **Try again** (same parsed script)
+  - **Retry only missed lines**
+  - **Quit**
 
-## How it works
-1. `ScriptToString` reads the script 
-2. `ScriptParser.java` parses dialogue into aligned lists:
-   - `cueLines[i]` = the cue before line `i`
-   - `charLines[i]` = your character’s expected line `i`
-3. The parsed results are packaged into a `ParsedScript` object to keep parsing separate from practice logic.
-4. `PracticeSession` iterates through `ParsedScript` and prompts the user to type each line based on input from `Settings.java`.
+## Settings (current)
+When you start the program, you can choose:
+- **Include stage directions in cue lines** (only stage directions that appear on their own line and start with `(`)
+- **Case sensitive** vs. case-insensitive checking
+- **Keep punctuation** vs. ignore punctuation when checking answers
+- **Timed mode** (shows time per line + total session time)
 
-## Project structure
-- `Main.java` – program entry point (loads script, starts practice)
-- `ScriptToString.java` – file reading
-- `ParsedScript.java` – container for parsed cue/line pairs (encapsulation)
-- `ScriptParser.java` – script parser
-- `PracticeSession.java` – interactive rehearsal loop
-- `Settings.java`- interactive settings menu
-- `Example-Scripts/` – sample scripts for testing and demos
+## Supported script formats (v0.5)
+Line-Learner currently recognizes character dialogue in these patterns:
 
-## Script format (v0.5)
-This version expects character dialogue lines in a format like:
+### 1) Name + colon
+```text
+CHARACTER: Spoken text here
+```
 
-CHARACTER: spoken text here
-(stage directions are ignored)
-Continuation lines (non-character lines) are treated as part of the current speaker’s line.
-
-OR
-
+### 2) Name + period
+```text
 CHARACTER. Spoken text here
-(stage directions are ignored)
-Continuation lines (non-character lines) are treated as part of the current speaker’s line.
+```
 
-OR
-
+### 3) Name on its own line (followed by dialogue)
+```text
 CHARACTER
 Spoken text here
-(stage directions are ignored)
-Continuation lines (non-character lines) are treated as part of the current speaker’s line.
+```
+
+### Continuation lines
+If a line does **not** look like a new character name, it is treated as a continuation of the current speaker’s dialogue and appended to the previous line.
+
+### Stage directions
+- A stage direction line that **starts with `(`** is treated as a stage direction.
+- If stage-direction mode is **enabled**, stage directions are appended to the current cue line (as long as it is not currently your character’s turn).
+- Inline parentheticals like `Hello (whispering) there` are removed from dialogue before parsing.
+
+## How it works
+1. `ScriptToString` reads the selected script file into a single `String`.
+2. `ScriptParser` walks through the script line-by-line and builds two aligned lists:
+   - `cueLines[i]` = the cue line before your line `i`
+   - `charLines[i]` = your expected line `i`
+3. These lists are packaged into a `ParsedScript` object (clean data model).
+4. `PracticeSession` iterates through `ParsedScript` and prompts the user using settings from `Settings`.
+
+## Project structure
+- `Main.java` – program entry point (settings → load → parse → practice)
+- `Settings.java` – interactive settings menu
+- `ScriptToString.java` – file reading
+- `ScriptParser.java` – script parser
+- `ParsedScript.java` – container for parsed cue/line pairs
+- `PracticeSession.java` – interactive rehearsal loop + retry menu
+- `Example-Scripts/` – sample scripts for testing and demos
 
 ## Run locally
 1. Clone:
    ```bash
    git clone https://github.com/ZachGreenhawt/Line-Learner.git
    cd Line-Learner
-2. Compile: 
-    javac *.java
-3. Run: 
-    java Main
+   ```
+2. Compile:
+   ```bash
+   javac *.java
+   ```
+3. Run:
+   ```bash
+   java Main
+   ```
+
+## Known limitations (for now)
+- Speaker detection is heuristic-based (e.g., “NAME:”/“NAME.” and short all-caps names). Some scripts may require formatting tweaks.
+- Stage-direction handling currently only recognizes stage direction lines that start with `(`.
+- PDF support is limited to text-based PDF files
 
 ## Roadmap
-- Improve parsing for real scripts (NAME. / NAME: / multi-line dialogue)
-- Add options: retry line, skip line, review missed lines
-- PDF support
-- Simple GUI
+- Build PDF OCR 
+- More robust parsing for real-world scripts (wider stage direction formats, more speaker patterns)
+- Additional practice modes (difficulty, cue-only, skipping, spaced repetition)
+- Simple GUI / web UI
+- Voice Processing
 
 ## Why this project
-As a theatre student, I have always wanted a tool that focuses on the hardest part of memorization: Hearing the cue and delivering the correct line under pressure. This project is also a way to practice clean software design.
+As a theatre student, I wanted a tool that focuses on the hardest part of memorization: **hearing the cue and delivering the correct line**. Building it also lets me practice clean software design (separating input, parsing, data modeling, and interaction).
 
-## Notes
-Scripts will commonly contain sensitive material; Line-Learner runs locally and does not upload scripts anywhere. 
+## Privacy
+Scripts can contain sensitive material. Line-Learner runs locally and does **not** upload scripts anywhere.
