@@ -44,7 +44,7 @@ public class PracticeSession {
             expected = caseSensitive ? expected : expected.toLowerCase();
             answer = punctuation ? answer : answer.replaceAll("\\p{Punct}", "").strip();
             expected = punctuation ? expected : expected.replaceAll("\\p{Punct}", "").strip();
-            if (answer.equals(expected)){
+            if (answer.contains(expected)){
                 r++; //Add to the right count
                 System.out.println("You are correct!");
             }
@@ -96,7 +96,7 @@ public class PracticeSession {
             expected = caseSensitive ? expected : expected.toLowerCase();
             answer = punctuation ? answer : answer.replaceAll("\\p{Punct}", "").strip();
             expected = punctuation ? expected : expected.replaceAll("\\p{Punct}", "").strip();
-            if (answer.equals(expected)){
+            if (answer.contains(expected)){
                 r++;
                 System.out.println("You are correct!");
             }
