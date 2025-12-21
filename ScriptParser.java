@@ -37,9 +37,34 @@ public class ScriptParser {
         for (int i = 0; i < lines.length; i++){
             String raw = lines[i];
             String line = raw.strip();
-            if (line.isEmpty()) {
+            if (line.isEmpty() || line.toUpperCase().startsWith("ACT") || line.toUpperCase().startsWith("SCENE")) {
                 continue;
+            } 
+
+            boolean hasNext = (i + 1 < lines.length);
+            String nextLine = hasNext ? lines[i + 1].strip() : "";
+            int colon;
+
+            boolean nameOnOwnLine = (hasNext)
+                    && (line.length() <= 15)
+                    && (line.equals(line.toUpperCase()))
+                    && (!nextLine.isEmpty())
+                    && (!nextLine.equals(nextLine.toUpperCase()) && (!line.toUpperCase().startsWith("ACT")));
+
+            int explicitColon = line.indexOf(":");
+            if (explicitColon != -1 && explicitColon <= 15) {
+                colon = explicitColon;
+            } else if (nameOnOwnLine) {
+                colon = line.length();
+            } else {
+                colon = line.indexOf(":");
+                if (colon == -1) {
+                    if(line.indexOf(".") <= 15){
+                    colon = line.indexOf(".");
+                    }
+                }
             }
+
             if (line.startsWith("(")) {
                 if (settings.includeStageDirectionsInCue() && !myTurn) {
                     currentCue = currentCue + " " + line;
@@ -52,27 +77,15 @@ public class ScriptParser {
                     continue;
                 }
             }
-            int colon;
-            boolean hasNext = (i + 1 < lines.length);
-            String nextLine = hasNext ? lines[i + 1].strip() : "";
 
-            boolean nameOnOwnLine = (hasNext)
-                    && (line.length() <= 15)
-                    && (line.equals(line.toUpperCase()))
-                    && (!nextLine.isEmpty())
-                    && (!nextLine.equals(nextLine.toUpperCase()));
-
-            if (nameOnOwnLine) {
-                colon = line.length();
-            } else {
-                colon = line.indexOf(":");
-                if (colon == -1) {
-                    colon = line.indexOf(".");
-                }
-            }
             boolean posChar = (colon > 0 && colon <= 15);
+
             if (posChar){
                 String name = line.substring(0, colon);
+                name = name.strip();
+                if (name.endsWith(":") || name.endsWith(".")) {
+                    name = name.substring(0, name.length() - 1).strip();
+                }
 
                 boolean hasLetter = false;
                 boolean caps = true;
@@ -96,18 +109,40 @@ public class ScriptParser {
 
                     spoken = removeInlineP(spoken);
                     myTurn = name.strip().equals(characterName);
+                    boolean advanced = false;
+                    if (spoken.isEmpty() && myTurn) {
+                        int look = i + 1;
+                        while (look < lines.length) {
+                            String candidate = lines[look].strip();
+                             
+                            if (candidate.isEmpty()) {
+                                look++;
+                                continue;
+                            }
+                            if (candidate.startsWith("(")) {
+                                look++;
+                                continue;
+                            }
+                            spoken = removeInlineP(candidate);
+                            if (!spoken.isEmpty()) {
+                                i = look;
+                                advanced = true;
+                            }
+                            break;
+                        }
+                    }
 
                     if (myTurn && !spoken.isEmpty()) {
                         cueLines.add(currentCue);
                         myLines.add(spoken);
-                    } else if (!myTurn && !spoken.isEmpty()) {
-                        currentCue = line;
+                    } 
+                    else if(!myTurn && !spoken.isEmpty()){
+                        currentCue = name + ": " + spoken;
                     }
-
-                    if (nameOnOwnLine) {
+                    if (nameOnOwnLine && !advanced) {
                         i++;
                     }
-                    continue;
+                   continue;
                 }
             }
 
