@@ -47,10 +47,6 @@ public class ScriptToString {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setSortByPosition(true);
             String text = stripper.getText(pdf);
-            // DEBUG: dump raw PDF text
-            System.out.println("---- PDF TEXT DEBUG START ----");
-            System.out.println(text.replace("\r\n", "\n").replace("\r", "\n"));
-            System.out.println("---- PDF TEXT DEBUG END ----");
             return text.replace("\r\n", "\n").replace("\r", "\n");
         } catch (IOException e) {
             System.out.println("Could not read PDF: " + script.getName());
