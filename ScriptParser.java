@@ -59,10 +59,15 @@ public class ScriptParser {
             } else {
                 colon = line.indexOf(":");
                 if (colon == -1) {
-                    if(line.indexOf(".") <= 15){
-                    colon = line.indexOf(".");
+                    int dot = line.indexOf(".");
+                    if (dot != -1 && dot <= 15) {
+                        colon = dot;
                     }
                 }
+            }
+
+            if (colon < 0 || colon > line.length()) {
+                colon = -1;
             }
 
             if (line.startsWith("(")) {
@@ -75,6 +80,9 @@ public class ScriptParser {
                 line = removeInlineP(line);
                 if (line.isEmpty()){
                     continue;
+                }
+                if (colon < 0 || colon > line.length()) {
+                    colon = -1;
                 }
             }
 
