@@ -3,9 +3,9 @@
 **Line-Learner** is a Java rehearsal tool that helps actors memorize lines by practicing **cue pickup** (the line before yours) and checking **accuracy** (typing your line). It parses a script, extracts your character’s lines, pairs each one with the most recent cue line, and runs an interactive practice session in the terminal.
 
 ## What it does
-- Loads a script from a local `.txt` or `.txt` file (from `Example-Scripts/`)
+- Loads a script from a local `.txt` or `.pdf` file (from `Example-Scripts/`)
 - Prompts for **settings** and a **character name**
-- Parses the script into aligned **cue → response** pairs
+- Parses the script into aligned **cue --> response** pairs
 - Runs an interactive practice session and shows accuracy
 - Offers a post-practice menu:
   - **Try again** (same parsed script)
@@ -78,17 +78,26 @@ If a line does **not** look like a new character name, it is treated as a contin
    java Main
    ```
 
-## Known limitations (for now)
-- Speaker detection is heuristic-based (e.g., “NAME:”/“NAME.” and short all-caps names). Some scripts may require formatting tweaks.
-- Stage-direction handling currently only recognizes stage direction lines that start with `(`.
-- PDF support is limited to text-based PDF files
+## Known limitations (pre-v1)
+The following issues are actively being addressed and are planned to be resolved **before v1 is released**:
+- **Character introductions** (first appearance before a speaking line) can occasionally be misclassified
+- **Page numbers, headers, and footers** may be interpreted as dialogue or speaker names in some scripts
+- **Stage directions** beyond simple parenthetical lines (e.g., italic-only directions, action lines like “DANIEL crosses”) are still being normalized
+- Speaker detection remains heuristic based and may require minor formatting adjustments for unusual scripts.
+- PDF support is currently functionally limited to text-based PDFs; OCR support is still in active development.
 
 ## Roadmap
-- Build PDF OCR 
-- More robust parsing for real-world scripts (wider stage direction formats, more speaker patterns)
-- Additional practice modes (difficulty, cue-only, skipping, spaced repetition)
-- Simple GUI / web UI
-- Voice Processing
+### Before v1
+- Finalize robust handling for character introductions, page numbers, and non-dialogue artifacts
+- Expand stage-direction detection (action lines, italic-only directions, under-speaker parentheticals)
+- Stabilize OCR-based PDF ingestion
+- Harden speaker detection for real world, inconsistently formatted scripts
+
+### After v1
+- **Web-based GUI** for Line-Learner (browser-based rehearsal interface)
+- Additional practice modes (difficulty levels, cue-only, skipping, spaced repetition)
+- Improved accuracy analytics and session history
+- Optional voice-based practice and speech comparison
 
 ## Why this project
 As a theatre student, I wanted a tool that focuses on the hardest part of memorization: **hearing the cue and delivering the correct line**. Building it also lets me practice clean software design (separating input, parsing, data modeling, and interaction).
