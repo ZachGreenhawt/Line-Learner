@@ -1,5 +1,5 @@
 # Line-Learner
-
+# This project was postponed to be completed Summer 2026
 **Line-Learner** is a Java rehearsal tool that helps actors memorize lines by practicing **cue pickup** (the line before yours) and checking **accuracy** (typing your line). It parses a script, extracts your character’s lines, pairs each one with the most recent cue line, and runs an interactive practice session in the terminal.
 
 ## What it does
