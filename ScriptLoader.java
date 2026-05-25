@@ -1,0 +1,410 @@
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
+
+public class ScriptLoader {
+
+  private static final boolean USE_EXTRACTED_TEXT_CACHE = true;
+  private static final String EXTRACTION_PIPELINE_VERSION =
+    "pdf-ocr-v2-orientation-spread";
+
+  public static String load(Scanner sc) {
+    String extension = extension(sc);
+    String name = name(sc);
+    ParserSessionStore session = new ParserSessionStore(name);
+    session.ensureFolders();
+    CsvExporter.session(name);
+
+    File script = new File("Example-Scripts/" + name + extension);
+    if (!script.exists()) {
+      System.out.println("Could not find file: " + script.getPath());
+      return "";
+    }
+
+    if (extension.equals(".txt")) {
+      String text = readTxt(script);
+      session.saveText(text);
+      return text;
+    }
+
+    return readPdf(script, session);
+  }
+
+  private static String extension(Scanner sc) {
+    System.out.println(
+      "Please enter the number that corresponds with your file type:\n[1] .txt\n[2] .pdf\n(Default is 1)"
+    );
+    String choice = sc.nextLine().trim();
+    return choice.equals("2") ? ".pdf" : ".txt";
+  }
+
+  private static String name(Scanner sc) {
+    String name = "";
+    while (name.isEmpty()) {
+      System.out.println(
+        "Enter the file name of your script.\nPlease exclude the file extension:"
+      );
+      name = sc.nextLine().trim();
+    }
+    return name;
+  }
+
+  private static String readTxt(File script) {
+    try {
+      return normalize(
+        Files.readString(script.toPath(), StandardCharsets.UTF_8)
+      );
+    } catch (IOException e) {
+      System.out.println("Could not read txt file: " + script.getName());
+      return "";
+    }
+  }
+
+  private static String readPdf(File script, ParserSessionStore session) {
+    if (!USE_EXTRACTED_TEXT_CACHE) {
+      return pdf(script);
+    }
+
+    Path cacheFile = session.textPath();
+    Path metaFile = cacheFile.resolveSibling("extracted_text.meta");
+    String expectedMeta = meta(script);
+
+    String cached = readCache(cacheFile, metaFile, expectedMeta);
+    if (!cached.isEmpty()) {
+      return cached;
+    }
+
+    String text = pdf(script);
+    writeCache(cacheFile, metaFile, expectedMeta, text);
+    return text;
+  }
+
+  private static String readCache(
+    Path cacheFile,
+    Path metaFile,
+    String expectedMeta
+  ) {
+    try {
+      if (!Files.exists(cacheFile) || !Files.exists(metaFile)) {
+        return "";
+      }
+
+      String actualMeta = Files.readString(
+        metaFile,
+        StandardCharsets.UTF_8
+      ).trim();
+      if (!expectedMeta.equals(actualMeta)) {
+        return "";
+      }
+
+      System.out.println("Using cached extracted text: " + cacheFile);
+      return normalize(Files.readString(cacheFile, StandardCharsets.UTF_8));
+    } catch (IOException e) {
+      System.out.println("Could not read extracted text cache; rebuilding it.");
+      return "";
+    }
+  }
+
+  private static void writeCache(
+    Path cacheFile,
+    Path metaFile,
+    String expectedMeta,
+    String text
+  ) {
+    if (text == null || text.isEmpty()) {
+      return;
+    }
+
+    try {
+      Files.createDirectories(cacheFile.getParent());
+      Files.writeString(cacheFile, text, StandardCharsets.UTF_8);
+      Files.writeString(metaFile, expectedMeta, StandardCharsets.UTF_8);
+      System.out.println("Saved extracted text cache: " + cacheFile);
+    } catch (IOException e) {
+      System.out.println(
+        "Could not save extracted text cache: " + e.getMessage()
+      );
+    }
+  }
+
+  private static String meta(File script) {
+    return String.format(
+      "pipeline=%s\nfile=%s\nsize=%d\nmodified=%d",
+      EXTRACTION_PIPELINE_VERSION,
+      script.getName(),
+      script.length(),
+      script.lastModified()
+    );
+  }
+
+  private static String pdf(File script) {
+    try {
+      return normalize(PdfTextExtractor.extract(script));
+    } catch (IOException e) {
+      System.out.println("Could not read PDF: " + script.getName());
+      System.out.println("Error: " + e.getMessage());
+      return "";
+    } catch (Throwable e) {
+      System.out.println("Could not finish PDF read for: " + script.getName());
+      System.out.println(
+        "Error: " + e.getClass().getSimpleName() + ": " + e.getMessage()
+      );
+      return "";
+    }
+  }
+
+  private static String normalize(String text) {
+    if (text == null) {
+      return "";
+    }
+
+    String fixed = basicUnicodeCleanup(text);
+    fixed = repairHyphens(fixed);
+    fixed = splitMarkers(fixed);
+    fixed = fixSplitNames(fixed);
+    fixed = collapseBlankLines(fixed);
+    return fixed.trim();
+  }
+
+  private static String basicUnicodeCleanup(String text) {
+    if (text == null || text.isEmpty()) {
+      return "";
+    }
+
+    return text
+      .replace("\r\n", "\n")
+      .replace("\r", "\n")
+      .replace('\u00A0', ' ')
+      .replace("\u00AD", "")
+      .replace('\u200B', ' ')
+      .replace('\u200C', ' ')
+      .replace('\u200D', ' ')
+      .replace('\uFEFF', ' ')
+      .replace('\u2028', '\n')
+      .replace('\u2029', '\n')
+      .replace("\uFB00", "ff")
+      .replace("\uFB01", "fi")
+      .replace("\uFB02", "fl")
+      .replace("\uFB03", "ffi")
+      .replace("\uFB04", "ffl")
+      .replace("\uFB05", "st")
+      .replace("\uFB06", "st")
+      .replace('“', '"')
+      .replace('”', '"')
+      .replace('‘', '\'')
+      .replace('’', '\'')
+      .replace('—', '-')
+      .replace('–', '-')
+      .replace('…', '.');
+  }
+
+  private static String repairHyphens(String text) {
+    if (text == null || text.isEmpty()) {
+      return "";
+    }
+    return text.replaceAll("(?m)([A-Za-z]{2,})-\\h*\\n\\h*([a-z]{2,})", "$1$2");
+  }
+
+  private static String splitMarkers(String text) {
+    if (text == null || text.isEmpty()) {
+      return "";
+    }
+
+    String fixed = text;
+    String[] markers = {
+      "Characters:",
+      "Character:",
+      "AT RISE",
+      "At rise",
+      "EPISODE ",
+      "Episode ",
+      "ACT ",
+      "Act ",
+      "SCENE ",
+      "Scene:",
+      "INT.",
+      "EXT.",
+      "I/E.",
+      "Sounds:",
+      "Sound:",
+      "The scene blacks out",
+      "The Scene Blacks Out",
+    };
+
+    for (String marker : markers) {
+      fixed = fixed.replaceAll(
+        "(?m)(?<!^)\\h+(?=" + java.util.regex.Pattern.quote(marker) + ")",
+        "\n"
+      );
+    }
+
+    return fixed;
+  }
+
+  private static String fixSplitNames(String text) {
+    if (text == null || text.isEmpty()) {
+      return "";
+    }
+
+    String[] lines = text.split("\n", -1);
+    List<String> out = new ArrayList<>();
+
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i];
+      String trimmed = line.trim();
+
+      if (upperNamePart(trimmed)) {
+        List<String> split = collectSplitName(lines, i);
+        if (split.size() > 1) {
+          out.add(String.join(" ", split));
+          i += split.size() - 1;
+          continue;
+        }
+      }
+
+      out.add(line);
+    }
+
+    return String.join("\n", out);
+  }
+
+  private static List<String> collectSplitName(String[] lines, int startIndex) {
+    List<String> parts = new ArrayList<>();
+    parts.add(lines[startIndex].trim());
+
+    int index = startIndex + 1;
+    while (
+      index < lines.length &&
+      parts.size() < 4 &&
+      upperNamePart(lines[index].trim())
+    ) {
+      String next = lines[index].trim();
+      parts.add(next);
+
+      String joined = String.join(" ", parts);
+      if (stageHeading(joined) || !splitName(parts, joined)) {
+        parts.remove(parts.size() - 1);
+        break;
+      }
+      index++;
+    }
+
+    return parts;
+  }
+
+  private static boolean upperNamePart(String text) {
+    if (text == null) {
+      return false;
+    }
+
+    String t = text.trim();
+    if (t.length() < 2 || t.length() > 24) {
+      return false;
+    }
+    if (!t.matches("[A-Z][A-Z .'-]*")) {
+      return false;
+    }
+
+    int letters = 0;
+    for (int i = 0; i < t.length(); i++) {
+      if (Character.isLetter(t.charAt(i))) {
+        letters++;
+      }
+    }
+
+    return letters >= 2;
+  }
+
+  private static boolean splitName(List<String> parts, String joined) {
+    if (parts == null || joined == null) {
+      return false;
+    }
+
+    String name = joined.trim();
+    if (stageHeading(name)) {
+      return false;
+    }
+    if (name.length() > 45) {
+      return false;
+    }
+    if (!name.matches("[A-Z][A-Z0-9 .'-]+")) {
+      return false;
+    }
+    if (parts.size() < 2 || parts.size() > 4) {
+      return false;
+    }
+
+    for (String part : parts) {
+      String cleaned = part == null ? "" : part.replaceAll("[^A-Z0-9']", "");
+      if (cleaned.length() <= 1 && !cleaned.matches("[0-9]+")) {
+        return false;
+      }
+    }
+
+    String last = parts.get(parts.size() - 1);
+    return (
+      !last.endsWith(".") &&
+      !last.endsWith(":") &&
+      !last.endsWith(";") &&
+      !last.endsWith(",")
+    );
+  }
+
+  private static boolean stageHeading(String text) {
+    if (text == null) {
+      return false;
+    }
+
+    String upper = text.trim().toUpperCase();
+    if (upper.isEmpty()) {
+      return false;
+    }
+
+    String[] stageWords = {
+      "BLACKOUT",
+      "BLACK OUT",
+      "LIGHTS",
+      "LIGHT",
+      "SOUND",
+      "SOUNDS",
+      "MUSIC",
+      "CURTAIN",
+      "END",
+      "SCENE",
+      "ACT",
+      "INTERMISSION",
+      "PAUSE",
+      "BEAT",
+      "ENTRANCE",
+      "EXIT",
+      "EXEUNT",
+      "OFFSTAGE",
+      "ONSTAGE",
+    };
+
+    for (String word : stageWords) {
+      if (
+        upper.equals(word) ||
+        upper.startsWith(word + " ") ||
+        upper.endsWith(" " + word) ||
+        upper.contains(" " + word + " ")
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private static String collapseBlankLines(String text) {
+    if (text == null || text.isEmpty()) {
+      return "";
+    }
+    return text.replaceAll("\\n{3,}", "\n\n");
+  }
+}
