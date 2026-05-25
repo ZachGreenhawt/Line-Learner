@@ -1,4 +1,21 @@
-.DS_Store
-*.class
+# Generated parser output
 parser_exports/
 parser_sessions/
+
+# OCR diagnostics
+ocr_diagnostics.csv
+parser_output_pairs.csv
+parser_characters.csv
+parser_logical_lines.csv
+parser_heading_index.csv
+parser_blocks.csv
+parser_turns.csv
+parser_suspicious_turns.csv
+parser_health.csv
+
+# Java build output
+out/
+*.class
+
+# macOS
+.DS_Store
