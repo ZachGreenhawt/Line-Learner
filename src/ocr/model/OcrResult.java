@@ -1,3 +1,7 @@
+package ocr.model;
+
+import ocr.OcrCandidateScorer;
+
 public class OcrResult {
 
   public final String text;

@@ -1,4 +1,9 @@
+package parser;
+
 import java.util.Set;
+import parser.detect.*;
+import parser.model.ParseModels;
+import util.TextNormalizer;
 
 public class ConversationContext {
 

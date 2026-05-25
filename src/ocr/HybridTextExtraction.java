@@ -1,3 +1,5 @@
+package ocr;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -5,6 +7,7 @@ import java.util.List;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import parser.detect.PageFurnitureDetector;
 
 public class HybridTextExtraction {
 

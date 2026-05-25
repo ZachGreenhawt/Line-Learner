@@ -1,5 +1,8 @@
+package ocr;
+
 import java.util.HashSet;
 import java.util.Set;
+import ocr.model.OcrCandidate;
 
 public class OcrCandidateScorer {
 

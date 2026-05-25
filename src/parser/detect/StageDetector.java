@@ -1,5 +1,8 @@
+package parser.detect;
+
 import java.util.List;
 import java.util.Set;
+import util.TextNormalizer;
 
 public class StageDetector {
 

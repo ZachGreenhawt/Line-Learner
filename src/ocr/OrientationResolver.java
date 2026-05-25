@@ -1,3 +1,5 @@
+package ocr;
+
 import java.awt.Graphics2D;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
@@ -6,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.sourceforge.tess4j.Tesseract;
+import ocr.model.*;
 
 public class OrientationResolver {
 

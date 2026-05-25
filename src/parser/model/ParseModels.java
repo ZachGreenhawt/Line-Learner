@@ -1,3 +1,5 @@
+package parser.model;
+
 public class ParseModels {
 
   public enum IssueType {

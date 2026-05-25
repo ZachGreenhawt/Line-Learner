@@ -1,8 +1,16 @@
+package parser;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import parser.detect.*;
+import parser.export.CsvExporter;
+import parser.model.ParseModels;
+import parser.session.ParserSessionStore;
+import practice.*;
+import util.TextNormalizer;
 
 public class ScriptParser {
 

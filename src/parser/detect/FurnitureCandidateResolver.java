@@ -1,7 +1,10 @@
+package parser.detect;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import util.TextNormalizer;
 
 public class FurnitureCandidateResolver {
 

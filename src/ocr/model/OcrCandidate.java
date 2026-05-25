@@ -1,3 +1,5 @@
+package ocr.model;
+
 public class OcrCandidate {
 
   public final String text;

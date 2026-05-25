@@ -132,13 +132,13 @@ Scripts can contain sensitive material. Line-Learner runs locally and does **not
 2. Compile:
 
    ```bash
-   javac *.java
+   javac -cp ".:lib/*" -d out $(find src -name "*.java")
    ```
 
 3. Run:
 
    ```bash
-   java Main
+   java -cp "out:lib/*" app.Main
    ```
 
 On Windows, replace `:` with `;` in the classpath.

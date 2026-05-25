@@ -1,4 +1,8 @@
+package parser.detect;
+
 import java.util.Set;
+import parser.CharacterExtractor;
+import util.TextNormalizer;
 
 public class SpeakerDetector {
 

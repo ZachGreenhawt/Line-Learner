@@ -1,3 +1,5 @@
+package parser.session;
+
 import java.io.*;
 import java.nio.file.*;
 
@@ -70,12 +72,5 @@ public class ParserSessionStore {
     cleaned = cleaned.replaceAll("\\.[^.]+$", "");
     cleaned = cleaned.replaceAll("[^A-Za-z0-9._-]", "_");
     return cleaned.isEmpty() ? "current_script" : cleaned;
-  }
-
-  private static String escapeJson(String text) {
-    if (text == null) {
-      return "";
-    }
-    return text.replace("\\", "\\\\").replace("\"", "\\\"");
   }
 }

@@ -1,3 +1,5 @@
+package ocr.model;
+
 import java.util.Objects;
 
 public class TrialKey {

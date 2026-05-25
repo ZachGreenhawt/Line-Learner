@@ -1,7 +1,11 @@
+package parser;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import parser.detect.*;
+import util.TextNormalizer;
 
 public class LogicalLineBuilder {
 

@@ -1,4 +1,12 @@
+package app;
+
 import java.util.Scanner;
+import parser.ScriptLoader;
+import parser.ScriptParser;
+import parser.ScriptPreProcess;
+import practice.ParsedScript;
+import practice.PracticeSession;
+import practice.Settings;
 
 public class Main {
 

@@ -1,3 +1,5 @@
+package ocr;
+
 import java.util.Locale;
 
 public class TextExtractionQualityScorer {

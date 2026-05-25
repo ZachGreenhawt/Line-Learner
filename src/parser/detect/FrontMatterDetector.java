@@ -1,5 +1,9 @@
+package parser.detect;
+
 import java.util.List;
 import java.util.Set;
+import parser.ScriptParser;
+import util.TextNormalizer;
 
 public class FrontMatterDetector {
 
