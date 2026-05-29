@@ -803,9 +803,7 @@ public class SpeakerHeadingIndex {
       return false;
     }
 
-    return lower.matches(
-      ".*\\b(isbn|copyright|all rights|permission|publisher|published|publishing|press|catalogue|cataloging|manufactured|book design|cover art|cover design|directed by|produced by|commissioned by|premiere|licensed|license|licence|royalty|royalties|street|avenue|road|lane|drive|boulevard|suite|floor|building|city|state|country|website|www\\.|\\.com|\\.org|\\.net)\\b.*"
-    );
+    return RegexTerms.containsPublicationOrFurniture(lower);
   }
 
   private static boolean looksLikePersonNameRemainder(String text) {

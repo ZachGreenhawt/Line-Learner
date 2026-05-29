@@ -403,11 +403,7 @@ public class CharacterExtractor {
     if (!roleName(name)) {
       return;
     }
-    if (
-      looksLikeAuthorOrPublisherFurniture(name) ||
-      looksLikeCastActorName(name) ||
-      looksLikePageHeaderOrFooterName(name)
-    ) {
+    if (authorOrPublisher(name) || actorName(name) || headerOrFooter(name)) {
       return;
     }
     counts.put(name, counts.getOrDefault(name, 0) + 1);
@@ -473,6 +469,64 @@ public class CharacterExtractor {
     return roleName(clean);
   }
 
+  private static boolean articleOnly(String name) {
+    String n = TextNormalizer.cleanName(name);
+    return n.equals("A") || n.equals("AN") || n.equals("THE");
+  }
+
+  private static boolean badPhrase(String name) {
+    String n = TextNormalizer.cleanName(name);
+    if (n.isEmpty()) {
+      return true;
+    }
+
+    String[] w = n.split("\\s+");
+
+    if (
+      w.length >= 2 &&
+      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_BAD_FURNITURE))
+    ) {
+      return true;
+    }
+
+    if (
+      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_DIALOGUE_PRONOUN))
+    ) {
+      return true;
+    }
+
+    if (
+      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_DIALOGUE_VERB))
+    ) {
+      return true;
+    }
+
+    if (
+      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_STAGE_ACTION))
+    ) {
+      return true;
+    }
+
+    if (w.length >= 4 && !rolePhrase(n)) {
+      return true;
+    }
+
+    if (
+      w.length >= 3 &&
+      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_NAME_CONNECTOR)) &&
+      !rolePhrase(n)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private static boolean rolePhrase(String name) {
+    String n = TextNormalizer.cleanName(name);
+    return n.matches(RegexTerms.CHARACTER_ROLE_PHRASE_PATTERN);
+  }
+
   private static boolean validNameShape(String name) {
     return (
       !name.isEmpty() &&
@@ -480,11 +534,13 @@ public class CharacterExtractor {
       name.length() <= MAX_NAME_LENGTH &&
       !BAD_HEADINGS.contains(name) &&
       !BAD_SHORT_LINES.contains(name) &&
+      !articleOnly(name) &&
+      !badPhrase(name) &&
       !name.startsWith("ENTER ") &&
       !name.startsWith("EXIT ") &&
-      !looksLikeAuthorOrPublisherFurniture(name) &&
-      !looksLikeCastActorName(name) &&
-      !looksLikePageHeaderOrFooterName(name)
+      !authorOrPublisher(name) &&
+      !actorName(name) &&
+      !headerOrFooter(name)
     );
   }
 
@@ -541,11 +597,7 @@ public class CharacterExtractor {
     }
 
     String name = trueRoleName(raw);
-    if (
-      looksLikeAuthorOrPublisherFurniture(name) ||
-      looksLikeCastActorName(name) ||
-      looksLikePageHeaderOrFooterName(name)
-    ) {
+    if (authorOrPublisher(name) || actorName(name) || headerOrFooter(name)) {
       return;
     }
     counts.put(name, counts.getOrDefault(name, 0) + 1);
@@ -568,17 +620,19 @@ public class CharacterExtractor {
       words.length <= MAX_NAME_WORDS &&
       !BAD_HEADINGS.contains(name) &&
       !BAD_SHORT_LINES.contains(name) &&
+      !articleOnly(name) &&
+      !badPhrase(name) &&
       !name.startsWith("ENTER ") &&
       !name.startsWith("EXIT ") &&
-      !looksLikeAuthorOrPublisherFurniture(name) &&
-      !looksLikeCastActorName(name) &&
-      !looksLikePageHeaderOrFooterName(name) &&
+      !authorOrPublisher(name) &&
+      !actorName(name) &&
+      !headerOrFooter(name) &&
       !repeated(name) &&
       !combinedName(name, counts)
     );
   }
 
-  private static boolean looksLikeAuthorOrPublisherFurniture(String name) {
+  private static boolean authorOrPublisher(String name) {
     String clean = TextNormalizer.cleanName(name);
     if (clean.isEmpty()) {
       return true;
@@ -591,9 +645,7 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches(
-        ".*\\b(PREFACE|FOREWORD|INTRODUCTION|CREDITS|CAST|CHARACTERS|COPYRIGHT|ISBN|PUBLISHER|PUBLISHED|PUBLICATION|SERVICE|PRESS|THEATRE|THEATER|COMPANY|AGENCY|LICENSE|LICENCE|RIGHTS|PERMISSION|CATALOGUE|CATALOGING|MANUFACTURED|DESIGN|DIRECTOR|DIRECTED|PRODUCED|PREMIERE|ARTISTIC|EXECUTIVE|BROADWAY|TRIBUNE|VARIETY|WORLD|MAGAZINE|JOURNAL|REVIEW|REVIEWS|PRAISE)\\b.*"
-      )
+      upper.matches(RegexTerms.containsAnyWord(RegexTerms.AUTHOR_PUBLISHER_TERM))
     ) {
       return true;
     }
@@ -603,9 +655,7 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches(
-        ".*\\b(A PLAY BY|PLAY BY|BOOK DESIGN|COVER ART|COVER DESIGN|ALL RIGHTS|NO PROFESSIONAL|NONPROFESSIONAL|WRITTEN PERMISSION|ORIGINALLY PRODUCED|FIRST PUBLISHED|ADAPTED BY|WRITTEN BY|BASED ON|STORY BY|MUSIC BY|LYRICS BY)\\b.*"
-      )
+      upper.matches(RegexTerms.containsAnyWord(RegexTerms.AUTHOR_PUBLISHER_PHRASE))
     ) {
       return true;
     }
@@ -620,7 +670,7 @@ public class CharacterExtractor {
     }
 
     return upper.matches(
-      ".*\\b(VOICE|VOICES|OFFSTAGE|ONSTAGE|FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|YOUNG|OLD|OLDER|LITTLE|BIG|SMALL|TALL|SHORT|LEFT|RIGHT|LEAD|HEAD|ASSISTANT|DEPUTY|CHIEF|FOREMAN|WORKER|CUSTOMER|STRANGER|VISITOR|NEIGHBOR|NEIGHBOUR|PASSERBY|PASSER-BY|PERSON|SOMEONE|SOMEBODY|ANYBODY|EVERYBODY|WITNESS|SPECTATOR|SPECTATORS)\\b.*"
+      RegexTerms.containsAnyWord(RegexTerms.CHARACTER_FUNCTION_ROLE)
     );
   }
 
@@ -646,17 +696,13 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches(
-        ".*\\b(STREET|ST|AVENUE|AVE|ROAD|RD|LANE|LN|DRIVE|DR|BOULEVARD|BLVD|COURT|CT|PLACE|PL|SQUARE|SQ|BUILDING|FLOOR|SUITE)\\b.*"
-      )
+      upper.matches(RegexTerms.containsAnyWord(RegexTerms.STREET_ADDRESS_TERM))
     ) {
       return true;
     }
 
     if (
-      upper.matches(
-        ".*\\b(CITY|STATE|COUNTRY|UNITED STATES|UNITED KINGDOM|CANADA|ENGLAND)\\b.*"
-      )
+      upper.matches(RegexTerms.containsAnyWord(RegexTerms.COUNTRY_OR_REGION_TERM))
     ) {
       return true;
     }
@@ -664,7 +710,7 @@ public class CharacterExtractor {
     return false;
   }
 
-  private static boolean looksLikeCastActorName(String name) {
+  private static boolean actorName(String name) {
     String clean = TextNormalizer.cleanName(name);
     if (clean.isEmpty()) {
       return true;
@@ -693,7 +739,7 @@ public class CharacterExtractor {
     return titleCaseWords == words.length;
   }
 
-  private static boolean looksLikePageHeaderOrFooterName(String name) {
+  private static boolean headerOrFooter(String name) {
     String clean = TextNormalizer.cleanName(name);
     if (clean.isEmpty()) {
       return true;
@@ -738,7 +784,7 @@ public class CharacterExtractor {
   private static boolean roleWord(String name) {
     String upper = TextNormalizer.cleanName(name).toUpperCase();
     return upper.matches(
-      ".*\\b(GIRL|BOY|MAN|WOMAN|MOTHER|FATHER|SON|DAUGHTER|CHILD|BABY|FETUS|FOETUS|VOICE|VOICES|CLERK|JUDGE|PRIEST|LAWYER|ATTORNEY|REPORTER|GUARD|MATRON|HUSBAND|WIFE|COLONEL|CAPTAIN|SERGEANT|DOCTOR|NURSE|OFFICER|INSPECTOR|DETECTIVE|PROFESSOR|TEACHER|STUDENT|WAITER|WAITRESS|BELLBOY|JANITOR|MAID|SERVANT|KING|QUEEN|PRINCE|PRINCESS|DUKE|DUCHESS|LORD|LADY|FIRST|SECOND|THIRD|FOURTH|YOUNG|OLD|OLDER|ELDERLY|CHORUS|ENSEMBLE|CROWD|GROUP|OFFSTAGE|ANNOUNCER|NARRATOR|ADDING|FILING|TELEPHONE|DEFENSE|DEFENCE|PROSECUTION|BARBER|LOVER|HUCKSTER|SPECTATOR|SPECTATORS|JUROR|JURY|WITNESS|POLICEMAN|POLICE|ATTENDANT|STRANGER|CUSTOMER|WORKER|SECRETARY|STENOGRAPHER|OPERATOR|MESSENGER|BAILIFF|USHER|CLERK)\\b.*"
+      RegexTerms.containsAnyWord(RegexTerms.CHARACTER_ROLE_WORD)
     );
   }
 

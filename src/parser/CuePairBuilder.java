@@ -2,6 +2,7 @@ package parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import parser.detect.RegexTerms;
 import parser.model.ParseModels;
 import practice.Settings;
 import util.TextNormalizer;
@@ -247,11 +248,7 @@ public class CuePairBuilder {
     }
 
     String lower = cleaned.toLowerCase();
-    if (
-      lower.matches(
-        ".*\\b(isbn|copyright|all rights|permission|publisher|published|publishing|press|catalogue|cataloging|manufactured|book design|cover art|cover design|directed by|produced by|commissioned by|premiere|licensed|license|licence|royalty|royalties|street|avenue|road|lane|drive|boulevard|suite|floor|building|city|state|country|website|www\\.|\\.com|\\.org|\\.net)\\b.*"
-      )
-    ) {
+    if (RegexTerms.containsPublicationOrFurniture(lower)) {
       return true;
     }
     if (cleaned.matches("^\\d{1,4}$")) {

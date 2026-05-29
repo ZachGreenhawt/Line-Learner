@@ -219,6 +219,13 @@ public class SpeakerBlockBuilder {
         continue;
       }
 
+      String spoken = removeStageTail(line, knownSpeakers);
+
+      if (spoken.isEmpty()) {
+        reason = appendReason(spoken, "source_only_stage");
+        continue;
+      }
+
       boolean firstText = text.length() == 0;
       appendSpace(text, line);
       reason = appendReason(
@@ -241,6 +248,39 @@ public class SpeakerBlockBuilder {
     );
 
     return new Built(block, end, extras, lastSpeaker);
+  }
+
+  private static String removeStageTail(
+    String line,
+    Set<String> knownSpeakers
+  ) {
+    String cleaned = TextNormalizer.norm(line);
+    if (
+      cleaned.isEmpty() || knownSpeakers == null || knownSpeakers.isEmpty()
+    ) return cleaned;
+
+    for (String speaker : CharacterExtractor.sortedNamesByLength(
+      knownSpeakers
+    )) {
+      String name = TextNormalizer.cleanName(speaker);
+      if (name.isEmpty()) continue;
+
+      Pattern pattern = Pattern.compile(
+        "\\b" +
+          Pattern.quote(name) +
+          "\\s+(" +
+          RegexTerms.STAGE_TAIL_ACTION +
+          ")\\b",
+        Pattern.CASE_INSENSITIVE
+      );
+
+      Matcher matcher = pattern.matcher(cleaned);
+      if (matcher.find()) {
+        String before = cleaned.substring(0, matcher.start()).trim();
+        return TextNormalizer.norm(before);
+      }
+    }
+    return cleaned;
   }
 
   private static EmbeddedResult applyEmbedded(
@@ -287,34 +327,31 @@ public class SpeakerBlockBuilder {
 
   private static LineRole roleFor(String line, boolean hasText, Mode mode) {
     String cleaned = TextNormalizer.norm(line);
-    if (cleaned.isEmpty()) {
-      return LineRole.BOUNDARY;
-    }
+    if (cleaned.isEmpty()) return LineRole.BOUNDARY;
 
-    if (boundary(cleaned) || majorStageTransition(cleaned)) {
-      return LineRole.BOUNDARY;
-    }
+    if (
+      boundary(cleaned) || majorStageTransition(cleaned)
+    ) return LineRole.BOUNDARY;
 
-    if (spokenAddress(cleaned)) {
-      return LineRole.TEXT;
-    }
+    if (spokenAddress(cleaned)) return LineRole.TEXT;
 
-    if (!hasText && bridge(cleaned)) {
-      return LineRole.BRIDGE;
-    }
+    if (!hasText && bridge(cleaned)) return LineRole.BRIDGE;
 
-    if (sourceOnlyBeat(cleaned) && (!mode.narrative || bridge(cleaned))) {
-      return LineRole.SOURCE_ONLY;
-    }
+    if (
+      sourceOnlyBeat(cleaned) && (!mode.narrative || bridge(cleaned))
+    ) return LineRole.SOURCE_ONLY;
+
+    if (hasText && standaloneStage(cleaned)) return LineRole.SOURCE_ONLY;
 
     return LineRole.TEXT;
   }
 
   private static EmbeddedHeading embedded(String line, Set<String> speakers) {
     String cleaned = TextNormalizer.norm(line);
-    if (cleaned.isEmpty() || speakers == null || speakers.isEmpty()) {
-      return EmbeddedHeading.none();
-    }
+    if (
+      cleaned.isEmpty() || speakers == null || speakers.isEmpty()
+    ) return EmbeddedHeading.none();
+
     if (spokenAddress(cleaned)) {
       return EmbeddedHeading.none();
     }
@@ -644,11 +681,7 @@ public class SpeakerBlockBuilder {
     }
 
     String lower = cleaned.toLowerCase();
-    if (
-      lower.matches(
-        ".*\\b(isbn|copyright|all rights|permission|publisher|published|publishing|press|catalogue|cataloging|manufactured|book design|cover art|cover design|directed by|produced by|commissioned by|premiere|licensed|license|licence|royalty|royalties|street|avenue|road|lane|drive|boulevard|suite|floor|building|city|state|country|website|www\\.|\\.com|\\.org|\\.net)\\b.*"
-      )
-    ) {
+    if (RegexTerms.containsPublicationOrFurniture(lower)) {
       return true;
     }
 

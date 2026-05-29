@@ -207,10 +207,8 @@ public class SpeakerDetector {
       raw.endsWith(".") ||
       raw.endsWith(":") ||
       name.matches(".*\\b\\d{1,3}\\b.*") ||
-      name.matches("(?i)^(A|AN|THE)\\s+[A-Z][A-Z0-9 .'’\\-]{1,50}$") ||
-      name.matches(
-        "[A-Z][A-Z0-9 .'’\\-]+(?:\\s*/\\s*[A-Z][A-Z0-9 .'’\\-]+)+"
-      ) ||
+      name.matches(RegexTerms.SPEAKER_ARTICLE_HEADING_PATTERN) ||
+      name.matches(RegexTerms.SPEAKER_SLASH_HEADING_PATTERN) ||
       (words.length <= 4 && name.equals(name.toUpperCase()))
     );
   }
@@ -435,7 +433,9 @@ public class SpeakerDetector {
 
       if (starts(line, clean) || startsParenthetical(line, clean)) {
         String rest = afterRaw(line, clean);
-        if (StageDetector.actionStart(rest) && !bareTurn(rest)) continue;
+        if (
+          !rest.isEmpty() && StageDetector.actionStart(rest) && !bareTurn(rest)
+        ) continue;
         return clean;
       }
     }
@@ -610,7 +610,7 @@ public class SpeakerDetector {
     if (
       StageDetector.whole(rest) ||
       StageDetector.actionStart(rest) ||
-      rest.matches("^(?i)(enter|exit|exeunt|re-enter|reenter)\\b.*")
+      rest.matches(RegexTerms.SPEAKER_BARE_STAGE_START_PATTERN)
     ) {
       return false;
     }
@@ -687,9 +687,7 @@ public class SpeakerDetector {
       return false;
     }
 
-    return before.matches(
-      ".*\\b(enter|enters|exit|exits|re enter|re enters|re-enter|re-enters|reenter|reenters)$"
-    );
+    return before.matches(RegexTerms.SPEAKER_ENTRANCE_CUE_PATTERN);
   }
 
   private static boolean insideStage(String line, int start) {
@@ -715,9 +713,7 @@ public class SpeakerDetector {
       return false;
     }
 
-    return lower.matches(
-      ".*\\b(enters?|exits?|crosses|looks at|watches|follows|touches|kisses|helps|leads|brings|takes|puts|lays|hands to|gives to|speaks to|talks to|turns to|goes to|comes to)\\s+$"
-    );
+    return lower.matches(RegexTerms.SPEAKER_INSIDE_STAGE_PATTERN);
   }
 
   private static boolean validInsideEnd(String line, int end) {
