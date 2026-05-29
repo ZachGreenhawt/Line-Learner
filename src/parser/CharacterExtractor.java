@@ -1,9 +1,5 @@
 package parser;
 
-import parser.detect.*;
-import parser.session.ParserSessionStore;
-import util.TextNormalizer;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +11,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import parser.detect.*;
+import parser.session.ParserSessionStore;
+import util.TextNormalizer;
 
 public class CharacterExtractor {
 
@@ -292,33 +291,24 @@ public class CharacterExtractor {
 
   private static void addFromLine(Map<String, Integer> counts, String line) {
     String cleaned = TextNormalizer.norm(line);
-    String stripped = stripArticlePrefix(cleaned);
 
     if (addCast(counts, cleaned)) {
-      if (stripped.equals(cleaned)) {
-        return;
-      }
-      addCast(counts, stripped);
       return;
     }
 
-    if (addCast(counts, stripped)) {
-      return;
-    }
-
-    int colon = stripped.indexOf(":");
+    int colon = cleaned.indexOf(":");
     if (colon > 0) {
-      addCandidate(counts, stripped.substring(0, colon));
+      addCandidate(counts, cleaned.substring(0, colon));
       return;
     }
 
-    int dot = SpeakerDetector.speakerDot(stripped);
+    int dot = SpeakerDetector.speakerDot(cleaned);
     if (dot > 0) {
-      addCandidate(counts, stripped.substring(0, dot));
+      addCandidate(counts, cleaned.substring(0, dot));
       return;
     }
 
-    addCandidate(counts, stripped);
+    addCandidate(counts, cleaned);
   }
 
   private static boolean addCast(Map<String, Integer> counts, String line) {
@@ -400,8 +390,16 @@ public class CharacterExtractor {
     return containsOnlyNameCharacters(raw);
   }
 
+  private static String trueRoleName(String raw) {
+    String clean = TextNormalizer.cleanName(raw);
+
+    int slash = clean.indexOf("/");
+    if (slash > 0) clean = clean.substring(0, slash).trim();
+    return TextNormalizer.cleanName(stripArticlePrefix(clean));
+  }
+
   private static void addRole(Map<String, Integer> counts, String raw) {
-    String name = TextNormalizer.cleanName(raw);
+    String name = trueRoleName(raw);
     if (!roleName(name)) {
       return;
     }
@@ -542,7 +540,7 @@ public class CharacterExtractor {
       return;
     }
 
-    String name = TextNormalizer.cleanName(raw);
+    String name = trueRoleName(raw);
     if (
       looksLikeAuthorOrPublisherFurniture(name) ||
       looksLikeCastActorName(name) ||

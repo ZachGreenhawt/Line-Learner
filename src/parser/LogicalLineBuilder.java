@@ -120,16 +120,6 @@ public class LogicalLineBuilder {
       "$1"
     );
 
-    line = line.replaceAll(
-      "^\\s*\\d{1,4}\\s+([A-Z][A-Z0-9'’\\- ]{1,55}(?:\\s*/\\s*[A-Z][A-Z0-9'’\\- ]{1,55})?(?:[.:]|$))",
-      "$1"
-    );
-
-    line = line.replaceAll(
-      "^([A-Z][A-Z0-9'’\\- ]{1,55}(?:\\s*/\\s*[A-Z][A-Z0-9'’\\- ]{1,55})?)(?:\\s+)(\\d{1,4})$",
-      "$1"
-    );
-
     return TextNormalizer.norm(line);
   }
 

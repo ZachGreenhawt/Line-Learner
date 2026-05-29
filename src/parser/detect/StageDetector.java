@@ -687,17 +687,25 @@ public class StageDetector {
 
     String lower = TextNormalizer.norm(line).toLowerCase();
     for (String ch : chars) {
-      String prefix = ch.toLowerCase() + " ";
-      if (!lower.startsWith(prefix)) {
-        continue;
-      }
+      String clean = TextNormalizer.cleanName(ch).toLowerCase();
+      if (actionMatch(lower, "a " + clean)) return true;
+      if (actionMatch(lower, "an " + clean)) return true;
+      if (actionMatch(lower, "the " + clean)) return true;
+      if (actionMatch(lower, clean)) return true;
+    }
 
-      String rest = lower.substring(prefix.length());
-      for (String word : ACTION_WORDS) {
-        if (matchesWordStart(rest, word)) {
-          return true;
-        }
-      }
+    return false;
+  }
+
+  private static boolean actionMatch(String lower, String character) {
+    String prefix = character + " ";
+
+    if (!lower.startsWith(prefix)) return false;
+
+    String rest = lower.substring(prefix.length());
+
+    for (String word : ACTION_WORDS) {
+      if (matchesWordStart(rest, word)) return true;
     }
 
     return false;

@@ -434,6 +434,8 @@ public class SpeakerDetector {
       }
 
       if (starts(line, clean) || startsParenthetical(line, clean)) {
+        String rest = afterRaw(line, clean);
+        if (StageDetector.actionStart(rest) && !bareTurn(rest)) continue;
         return clean;
       }
     }
