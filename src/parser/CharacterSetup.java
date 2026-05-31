@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import util.RegexTerms;
 
 public class CharacterSetup {
 
@@ -146,7 +147,7 @@ public class CharacterSetup {
       return nums;
     }
 
-    for (String part : text.split(",")) {
+    for (String part : text.split(RegexTerms.COMMA)) {
       try {
         nums.add(Integer.parseInt(part.trim()));
       } catch (NumberFormatException ignored) {}
@@ -164,7 +165,7 @@ public class CharacterSetup {
       return;
     }
 
-    for (String edit : text.split(",")) {
+    for (String edit : text.split(RegexTerms.COMMA)) {
       edit(chars, aliases, edit);
     }
   }
@@ -178,7 +179,7 @@ public class CharacterSetup {
       return;
     }
 
-    String[] parts = text.split("=", 2);
+    String[] parts = text.split(RegexTerms.EQUALS, 2);
     String name = clean(parts[1]);
     if (name.isEmpty()) {
       return;
@@ -203,7 +204,7 @@ public class CharacterSetup {
       return;
     }
 
-    for (String part : text.split(",")) {
+    for (String part : text.split(RegexTerms.COMMA)) {
       String name = clean(part);
       if (!name.isEmpty()) {
         chars.add(name);
@@ -233,7 +234,7 @@ public class CharacterSetup {
     if (name == null) {
       return "";
     }
-    return name.trim().replaceAll("\\s+", " ").toUpperCase();
+    return name.trim().replaceAll(RegexTerms.WHITESPACE, " ").toUpperCase();
   }
 
   private static boolean blank(String text) {

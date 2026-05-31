@@ -11,62 +11,17 @@ import java.util.Set;
 import parser.CharacterExtractor;
 import parser.detect.SpeakerHeadingIndex;
 import parser.model.ParseModels;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class CsvExporter {
-
-  public static class ContextDebugRow {
-
-    public final int lineNumber;
-    public final String rawLine;
-    public final String detectedSpeaker;
-    public final String decision;
-    public final String expectedSpeaker;
-    public final String lastExplicitSpeaker;
-    public final String lastDialogueSpeaker;
-    public final boolean rapidFireMode;
-    public final String stageStrength;
-    public final String confidence;
-    public final String reason;
-    public final String contextSummary;
-
-    public ContextDebugRow(
-      int lineNumber,
-      String rawLine,
-      String detectedSpeaker,
-      String decision,
-      String expectedSpeaker,
-      String lastExplicitSpeaker,
-      String lastDialogueSpeaker,
-      boolean rapidFireMode,
-      String stageStrength,
-      String confidence,
-      String reason,
-      String contextSummary
-    ) {
-      this.lineNumber = lineNumber;
-      this.rawLine = rawLine == null ? "" : rawLine;
-      this.detectedSpeaker = detectedSpeaker == null ? "" : detectedSpeaker;
-      this.decision = decision == null ? "" : decision;
-      this.expectedSpeaker = expectedSpeaker == null ? "" : expectedSpeaker;
-      this.lastExplicitSpeaker =
-        lastExplicitSpeaker == null ? "" : lastExplicitSpeaker;
-      this.lastDialogueSpeaker =
-        lastDialogueSpeaker == null ? "" : lastDialogueSpeaker;
-      this.rapidFireMode = rapidFireMode;
-      this.stageStrength = stageStrength == null ? "" : stageStrength;
-      this.confidence = confidence == null ? "" : confidence;
-      this.reason = reason == null ? "" : reason;
-      this.contextSummary = contextSummary == null ? "" : contextSummary;
-    }
-  }
 
   private static String exportSessionName = "current_script";
 
   public static void session(String sessionName) {
     String cleaned = sessionName == null ? "" : sessionName.trim();
-    cleaned = cleaned.replaceAll("\\.[^.]+$", "");
-    cleaned = cleaned.replaceAll("[^A-Za-z0-9._-]", "_");
+    cleaned = cleaned.replaceAll(RegexTerms.EXTENSION_SUFFIX, "");
+    cleaned = cleaned.replaceAll(RegexTerms.NON_SESSION_NAME_CHAR, "_");
     exportSessionName = cleaned.isEmpty() ? "current_script" : cleaned;
   }
 
@@ -298,112 +253,6 @@ public class CsvExporter {
     }
 
     return counts;
-  }
-
-  public static void debugLines(
-    List<ParseModels.DebugLine> rows,
-    String filename
-  ) {
-    if (rows == null || rows.isEmpty()) {
-      return;
-    }
-
-    try (PrintWriter out = new PrintWriter(new FileWriter(path(filename)))) {
-      out.println(
-        "line_number,line,speaker,after_speaker,is_char,has_prefix,dialogue,prose_or_stage,stage_like,front_matter,page_junk,skip,body_before,body_after,active_before,active_after,cue_before,cue_after,action,spoken,added_cue,added_mine"
-      );
-
-      for (ParseModels.DebugLine row : rows) {
-        row(
-          out,
-          String.valueOf(row.lineNumber),
-          row.line,
-          row.speaker,
-          row.afterSpeaker,
-          String.valueOf(row.character),
-          String.valueOf(row.prefix),
-          String.valueOf(row.dialogue),
-          String.valueOf(row.prose),
-          String.valueOf(row.stage),
-          String.valueOf(row.front),
-          String.valueOf(row.junk),
-          String.valueOf(row.skip),
-          String.valueOf(row.bodyBefore),
-          String.valueOf(row.bodyAfter),
-          row.activeBefore,
-          row.activeAfter,
-          row.cueBefore,
-          row.cueAfter,
-          row.action,
-          row.spoken,
-          row.addedCue,
-          row.addedMine
-        );
-      }
-    } catch (IOException e) {
-      System.err.println("Could not write parser debug CSV: " + e.getMessage());
-    }
-  }
-
-  public static void context(List<ContextDebugRow> rows, String filename) {
-    if (rows == null || rows.isEmpty()) {
-      return;
-    }
-
-    try (PrintWriter out = new PrintWriter(new FileWriter(path(filename)))) {
-      out.println(
-        "line_number,raw_line,detected_speaker,decision,expected_speaker,last_explicit_speaker,last_dialogue_speaker,rapid_fire_mode,stage_strength,confidence,reason,context_summary"
-      );
-
-      for (ContextDebugRow row : rows) {
-        row(
-          out,
-          String.valueOf(row.lineNumber),
-          row.rawLine,
-          row.detectedSpeaker,
-          row.decision,
-          row.expectedSpeaker,
-          row.lastExplicitSpeaker,
-          row.lastDialogueSpeaker,
-          String.valueOf(row.rapidFireMode),
-          row.stageStrength,
-          row.confidence,
-          row.reason,
-          row.contextSummary
-        );
-      }
-    } catch (IOException e) {
-      System.err.println(
-        "Could not write parser context debug CSV: " + e.getMessage()
-      );
-    }
-  }
-
-  public static void issues(List<ParseModels.Issue> issues, String filename) {
-    if (issues == null || issues.isEmpty()) {
-      return;
-    }
-
-    try (PrintWriter out = new PrintWriter(new FileWriter(path(filename)))) {
-      out.println(
-        "line,issue_type,decision,parsed_speaker,parsed_text,reason,raw_line"
-      );
-
-      for (ParseModels.Issue issue : issues) {
-        row(
-          out,
-          String.valueOf(issue.lineNumber),
-          issue.issueType.toString(),
-          issue.decision,
-          issue.parsedSpeaker,
-          issue.parsedText,
-          issue.reason,
-          issue.rawLine
-        );
-      }
-    } catch (IOException e) {
-      System.err.println("Could not write parse issue CSV: " + e.getMessage());
-    }
   }
 
   public static void turns(
@@ -770,14 +619,6 @@ public class CsvExporter {
       return "HIGH";
     }
 
-    if (cleanNotes.contains("continued_wrapped_dialogue")) {
-      return "MEDIUM";
-    }
-
-    if (cleanNotes.contains("stage") || cleanNotes.contains("prose")) {
-      return "MEDIUM";
-    }
-
     return "MEDIUM";
   }
 
@@ -872,7 +713,7 @@ public class CsvExporter {
       return 0;
     }
 
-    String[] parts = cleaned.split("\\s+/\\s+");
+    String[] parts = cleaned.split(RegexTerms.SLASH_SEPARATOR);
     int count = 0;
     for (String part : parts) {
       if (!TextNormalizer.norm(part).isEmpty()) {
@@ -902,8 +743,8 @@ public class CsvExporter {
 
   private static String normalizedWithoutSeparators(String value) {
     return TextNormalizer.norm(value)
-      .replaceAll("\\s+/\\s+", " ")
-      .replaceAll("\\s+", " ")
+      .replaceAll(RegexTerms.SLASH_SEPARATOR, " ")
+      .replaceAll(RegexTerms.WHITESPACE, " ")
       .trim()
       .toLowerCase();
   }

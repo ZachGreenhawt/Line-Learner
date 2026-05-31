@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import util.RegexTerms;
 
 public class ParsedScript {
 
@@ -79,7 +80,7 @@ public class ParsedScript {
 
   private static String normalizeText(String text) {
     if (text == null) return "";
-    return text.trim().replaceAll("\\s+", " ");
+    return text.trim().replaceAll(RegexTerms.WHITESPACE, " ");
   }
 
   public String getCharName() {

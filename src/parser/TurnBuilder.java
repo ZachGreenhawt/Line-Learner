@@ -2,40 +2,13 @@ package parser;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import parser.detect.*;
 import parser.model.ParseModels;
 import util.TextNormalizer;
 
 public class TurnBuilder {
 
-  private static final int MAX_FORWARD_SCAN = 4;
-
-  public static List<ParseModels.ScriptTurn> build(
-    List<String> lines,
-    int start,
-    Set<String> chars
-  ) {
-    if (lines == null || lines.isEmpty()) {
-      return new ArrayList<>();
-    }
-
-    Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings =
-      SpeakerHeadingIndex.build(lines, chars, null);
-    List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(lines, headings);
-    return fromBlocks(blocks, start);
-  }
-
   public static List<ParseModels.ScriptTurn> fromBlocks(
     List<ParseModels.Block> blocks
-  ) {
-    return fromBlocks(blocks, 0);
-  }
-
-  private static List<ParseModels.ScriptTurn> fromBlocks(
-    List<ParseModels.Block> blocks,
-    int start
   ) {
     List<ParseModels.ScriptTurn> turns = new ArrayList<>();
     if (blocks == null || blocks.isEmpty()) {
@@ -43,10 +16,9 @@ public class TurnBuilder {
     }
 
     for (ParseModels.Block block : blocks) {
-      if (block == null || block.endLine < start) {
-        continue;
+      if (block != null) {
+        turns.add(turnFrom(block));
       }
-      turns.add(turnFrom(block));
     }
 
     return turns;
@@ -105,48 +77,5 @@ public class TurnBuilder {
       return note;
     }
     return TextNormalizer.norm(notes + " " + note);
-  }
-
-  public static int nextLine(
-    List<String> lines,
-    int speakerIndex,
-    Set<String> chars
-  ) {
-    if (lines == null || speakerIndex < 0) {
-      return -1;
-    }
-
-    int maxIndex = Math.min(lines.size() - 1, speakerIndex + MAX_FORWARD_SCAN);
-    for (int i = speakerIndex + 1; i <= maxIndex; i++) {
-      String line = TextNormalizer.norm(lines.get(i));
-
-      if (line.isEmpty() || shouldSkipLine(line, chars)) {
-        continue;
-      }
-      if (!SpeakerDetector.name(line, chars).isEmpty()) {
-        return -1;
-      }
-      if (StageDetector.whole(line) || StageDetector.location(line)) {
-        continue;
-      }
-      if (
-        StageDetector.prose(line, chars) && !ScriptParser.dialogue(line, chars)
-      ) {
-        continue;
-      }
-      if (ScriptParser.dialogue(line, chars)) {
-        return i;
-      }
-    }
-
-    return -1;
-  }
-
-  private static boolean shouldSkipLine(String line, Set<String> chars) {
-    boolean knownSpeaker =
-      SpeakerDetector.is(line, chars) || SpeakerDetector.has(line, chars);
-    return (
-      StageDetector.skip(line) || (StageDetector.junk(line) && !knownSpeaker)
-    );
   }
 }

@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import util.RegexTerms;
 
 public class PageFurnitureDetector {
 
@@ -16,7 +17,7 @@ public class PageFurnitureDetector {
     "</FURNITURE_CANDIDATE>";
   private static final int EDGE_WINDOW_LINES = 6;
   private static final int MIN_REPEATED_COUNT = 3;
-  private static final Pattern PAGE_NUMBER_ONLY = Pattern.compile("^\\d{1,4}$");
+  private static final Pattern PAGE_NUMBER_ONLY = Pattern.compile(RegexTerms.PAGE_NUMBER_ONLY);
 
   public static DetectionModel learn(List<String> pageTexts) {
     DetectionModel model = new DetectionModel();
@@ -56,7 +57,7 @@ public class PageFurnitureDetector {
 
     DetectionModel effectiveModel =
       model == null ? new DetectionModel() : model;
-    String[] rawLines = pageText.split("\\R", -1);
+    String[] rawLines = pageText.split(RegexTerms.LINE_BREAK, -1);
     StringBuilder out = new StringBuilder();
 
     for (int i = 0; i < rawLines.length; i++) {
@@ -129,22 +130,22 @@ public class PageFurnitureDetector {
     boolean protectedLine =
       structural(cleaned) || protectedSpeaker(norm(cleaned));
 
-    cleaned = cleaned.replaceAll("\\uFFFD", "");
-    cleaned = cleaned.replaceAll("[￾￿]", "");
+    cleaned = cleaned.replaceAll(RegexTerms.REPLACEMENT_CHAR, "");
+    cleaned = cleaned.replaceAll(RegexTerms.BROKEN_FFFE_CHARS, "");
 
     cleaned = cleaned.replaceAll(
-      "^([A-Z][A-Z0-9'’\\- ]{1,45}(?:\\s*/\\s*[A-Z][A-Z0-9'’\\- ]{1,45})?\\.)\\s*\\d{1,4}$",
+      RegexTerms.HEADING_WITH_TRAILING_PAGE_NUMBER,
       "$1"
     );
 
     cleaned = cleaned.replaceAll(
-      "^\\s*\\d{1,4}\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}\\s+(?=[A-Z][A-Z0-9'’\\- ]{1,45}(?:[.:]|$))",
+      RegexTerms.LEADING_NAME_BLEED,
       ""
     );
 
     if (!protectedLine) {
       cleaned = cleaned.replaceAll(
-        "\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}\\s+\\d{1,4}\\s*$",
+        RegexTerms.TRAILING_NAME_BLEED,
         ""
       );
     }
@@ -206,17 +207,17 @@ public class PageFurnitureDetector {
     }
 
     return (
-      lower.matches("^characters?:?.*$") ||
-      lower.matches("^sounds?:?.*$") ||
-      lower.matches("^scene:.*$") ||
-      lower.matches("^at rise\\b.*$") ||
-      lower.matches("^at the rise\\b.*$") ||
-      lower.matches("^before the curtain\\b.*$") ||
-      lower.matches("^episode\\s+[a-z0-9ivx -]+.*$") ||
-      lower.matches("^act\\s+[a-z0-9ivx -]+.*$") ||
-      lower.matches("^lights?\\b.*$") ||
-      lower.matches("^blackout\\b.*$") ||
-      lower.matches("^curtain\\b.*$")
+      lower.matches(RegexTerms.STRUCTURAL_CHARACTERS) ||
+      lower.matches(RegexTerms.STRUCTURAL_SOUNDS) ||
+      lower.matches(RegexTerms.STRUCTURAL_SCENE) ||
+      lower.matches(RegexTerms.STRUCTURAL_AT_RISE) ||
+      lower.matches(RegexTerms.STRUCTURAL_AT_THE_RISE) ||
+      lower.matches(RegexTerms.STRUCTURAL_BEFORE_CURTAIN) ||
+      lower.matches(RegexTerms.STRUCTURAL_EPISODE) ||
+      lower.matches(RegexTerms.STRUCTURAL_ACT) ||
+      lower.matches(RegexTerms.STRUCTURAL_LIGHTS) ||
+      lower.matches(RegexTerms.STRUCTURAL_BLACKOUT) ||
+      lower.matches(RegexTerms.STRUCTURAL_CURTAIN)
     );
   }
 
@@ -247,10 +248,10 @@ public class PageFurnitureDetector {
     }
 
     return (
-      normalized.matches("^[A-Z0-9 ./'’\\-]+\\.?$") ||
-      normalized.matches("^[A-Z0-9 ./'’\\-]+\\s*/\\s*[A-Z0-9 ./'’\\-]+\\.?$") ||
-      normalized.matches("^[A-Z0-9 ./'’\\-]+\\s*\\([^)]*\\)\\.?$") ||
-      normalized.matches("^[A-Z0-9 ./'’\\-]+\\s*\\[[^\\]]*\\]\\.?$")
+      normalized.matches(RegexTerms.WRAPPED_NAME_ONLY) ||
+      normalized.matches(RegexTerms.SLASH_SPEAKER_LINE) ||
+      normalized.matches(RegexTerms.WRAPPED_NAME_PAREN) ||
+      normalized.matches(RegexTerms.WRAPPED_NAME_BRACKET)
     );
   }
 
@@ -262,27 +263,27 @@ public class PageFurnitureDetector {
     }
 
     if (
-      normalized.matches("^\\([^)]*\\)\\.?$") ||
-      normalized.matches("^\\[[^\\]]*\\]\\.?$")
+      normalized.matches(RegexTerms.PAREN_WHOLE) ||
+      normalized.matches(RegexTerms.BRACKET_WHOLE)
     ) {
       return true;
     }
 
     return (
       lower.matches(
-        "^(enter|enters|exit|exits|exeunt|re-enter|re-enters|reenter|reenters)\\b.*"
+        RegexTerms.ENTRANCE_EXIT_START
       ) ||
       lower.matches(
-        "^(lights?|sound|music|blackout|curtain|pause|beat|silence)\\b.*"
+        RegexTerms.TECH_CUE_PAUSE
       ) ||
       lower.matches(
-        "^(inside|outside|onstage|offstage|upstage|downstage)\\b.*"
+        RegexTerms.LOCATION_DIRECTION
       ) ||
       lower.matches(
-        "^(a|an|the)\\s+(room|office|kitchen|bedroom|living room|sitting room|dining room|street|hall|hotel|hotel room|womb|church|house|apartment|courtroom|cell|yard|garden|stage|window|door)\\b.*"
+        RegexTerms.ARTICLE_SETTING_SHORT
       ) ||
       lower.matches(
-        "^[a-z][a-z'’ -]{1,45}\\s+(enters|exits|crosses|goes|comes|walks|runs|sits|stands|nods|waves|shrugs|smiles|kisses|touches|helps|reads|puts|gets|takes|twirls|consoles|sips|eats|whispers|opens|closes|carries|holds)\\b.*"
+        RegexTerms.LOWER_STAGE_ACTION
       )
     );
   }
@@ -298,10 +299,10 @@ public class PageFurnitureDetector {
     String upper = normalized.toUpperCase(Locale.ROOT);
     return (
       upper.matches(
-        "^[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}\\s+\\d{1,4}$"
+        RegexTerms.CAPS_WORDS_THEN_NUMBER
       ) ||
       upper.matches(
-        "^\\d{1,4}\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}$"
+        RegexTerms.NUMBER_THEN_CAPS_WORDS
       )
     );
   }
@@ -354,7 +355,7 @@ public class PageFurnitureDetector {
     String safeReason =
       reason == null || reason.isBlank()
         ? "ambiguous"
-        : reason.replaceAll("[^A-Za-z0-9_-]", "_");
+        : reason.replaceAll(RegexTerms.NON_FILENAME_CHAR, "_");
 
     return (
       FURNITURE_CANDIDATE_OPEN +
@@ -369,7 +370,7 @@ public class PageFurnitureDetector {
   private static String reason(String line) {
     String normalized = norm(line);
 
-    if (normalized.matches(".*\\d{1,4}.*")) {
+    if (normalized.matches(RegexTerms.CONTAINS_PAGE_NUMBER)) {
       return roleWord(normalized)
         ? "possible_numbered_heading"
         : "title_page_or_page_header";
@@ -393,7 +394,7 @@ public class PageFurnitureDetector {
   private static boolean pageNumber(String line) {
     return (
       PAGE_NUMBER_ONLY.matcher(line).matches() ||
-      line.matches("(?i)^PAGE\\s+\\d{1,4}$")
+      line.matches(RegexTerms.PAGE_LABEL)
     );
   }
 
@@ -401,26 +402,22 @@ public class PageFurnitureDetector {
     String upper = line.toUpperCase(Locale.ROOT);
 
     return (
-      upper.matches(".*\\bISBN\\b.*") ||
-      upper.matches(".*\\bCOPYRIGHT\\b.*") ||
-      upper.matches(".*\\bALL RIGHTS RESERVED\\b.*") ||
-      upper.matches(".*\\bPUBLISHED\\b.*") ||
-      upper.matches(".*\\bPUBLISHER\\b.*") ||
-      upper.matches(".*\\bPERMISSION\\b.*") ||
-      upper.matches(".*\\bRIGHTS\\b.*") ||
-      upper.matches(".*\\bWWW\\..*") ||
-      upper.matches(".*\\.(COM|ORG|NET|CO\\.UK)\\b.*") ||
-      upper.matches(".*\\bDRAMA\\s+\\$?\\d+.*") ||
-      upper.matches(".*\\b[A-Z]{2,}\\b.*\\b[A-Z]{2,}\\b.*\\b\\d{1,4}\\b.*") ||
+      upper.matches(
+        RegexTerms.containsAnyWord(RegexTerms.PUBLISHER_FURNITURE_WORD)
+      ) ||
+      upper.matches(RegexTerms.CONTAINS_WWW_CI) ||
+      upper.matches(RegexTerms.CONTAINS_WEB_TLD_CI) ||
+      upper.matches(RegexTerms.CONTAINS_DRAMA_PRICE) ||
+      upper.matches(RegexTerms.CAPS_CAPS_NUMBER_LINE) ||
       publicationPlace(upper)
     );
   }
 
   private static boolean marker(String line) {
     return (
-      line.matches("^<\\s*PARSED TEXT FOR PAGE:.*>$") ||
-      line.matches("^<\\s*REGION\\s+\\d+\\s+OF\\s+\\d+.*>$") ||
-      line.matches("^<\\s*IMAGE FOR PAGE:.*>$")
+      line.matches(RegexTerms.PAGE_MARKER_PARSED_TEXT) ||
+      line.matches(RegexTerms.PAGE_MARKER_REGION) ||
+      line.matches(RegexTerms.PAGE_MARKER_IMAGE)
     );
   }
 
@@ -443,7 +440,7 @@ public class PageFurnitureDetector {
       return false;
     }
 
-    String[] words = line.split("\\s+");
+    String[] words = line.split(RegexTerms.WHITESPACE);
     if (words.length <= 4 && genericTitle(line)) {
       return true;
     }
@@ -467,8 +464,8 @@ public class PageFurnitureDetector {
     }
 
     return (
-      line.matches("^[A-Z0-9 ./'’\\-]+\\.?$") ||
-      line.matches("^[A-Z0-9 ./'’\\-]+\\s*/\\s*[A-Z0-9 ./'’\\-]+\\.?$")
+      line.matches(RegexTerms.WRAPPED_NAME_ONLY) ||
+      line.matches(RegexTerms.SLASH_SPEAKER_LINE)
     );
   }
 
@@ -478,7 +475,7 @@ public class PageFurnitureDetector {
     }
 
     List<String> lines = new ArrayList<>();
-    for (String rawLine : text.split("\\R")) {
+    for (String rawLine : text.split(RegexTerms.LINE_BREAK)) {
       String line = norm(rawLine);
       if (!line.isEmpty()) {
         lines.add(line);
@@ -498,7 +495,7 @@ public class PageFurnitureDetector {
       .replace('￾', ' ')
       .replace('￿', ' ')
       .trim()
-      .replaceAll("\\s+", " ");
+      .replaceAll(RegexTerms.WHITESPACE, " ");
   }
 
   private static boolean hasLetter(String line) {
@@ -543,7 +540,7 @@ public class PageFurnitureDetector {
   }
 
   private static String collapse(String text) {
-    return text.replaceAll("\\n{3,}", "\\n\\n");
+    return text.replaceAll(RegexTerms.NEWLINE_RUN, "\\n\\n");
   }
 
   private static boolean genericTitle(String line) {
@@ -560,7 +557,7 @@ public class PageFurnitureDetector {
 
     if (
       upper.matches(
-        "^\\d{1,4}\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}$"
+        RegexTerms.NUMBER_THEN_CAPS_WORDS
       )
     ) {
       return true;
@@ -568,17 +565,13 @@ public class PageFurnitureDetector {
 
     if (
       upper.matches(
-        "^[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}\\s+\\d{1,4}$"
+        RegexTerms.CAPS_WORDS_THEN_NUMBER
       )
     ) {
       return true;
     }
 
-    if (plainCapsName(upper) && !roleWord(upper)) {
-      return true;
-    }
-
-    return false;
+    return plainCapsName(upper) && !roleWord(upper);
   }
 
   private static boolean plainCapsName(String line) {
@@ -601,13 +594,13 @@ public class PageFurnitureDetector {
       return false;
     }
 
-    String[] words = normalized.split("\\s+");
+    String[] words = normalized.split(RegexTerms.WHITESPACE);
     if (words.length < 1 || words.length > 3) {
       return false;
     }
 
     for (String word : words) {
-      if (!word.matches("[A-Z][A-Z'’\\-]{1,}")) {
+      if (!word.matches(RegexTerms.ALL_CAPS_WORD)) {
         return false;
       }
     }
@@ -618,7 +611,7 @@ public class PageFurnitureDetector {
   private static boolean roleWord(String line) {
     String upper = norm(line).toUpperCase(Locale.ROOT);
     return upper.matches(
-      ".*\\b(GIRL|BOY|MAN|WOMAN|MOTHER|FATHER|SON|DAUGHTER|CHILD|VOICE|CLERK|JUDGE|PRIEST|LAWYER|REPORTER|GUARD|MATRON|HUSBAND|WIFE|COLONEL|CAPTAIN|SERGEANT|DOCTOR|NURSE|OFFICER|INSPECTOR|DETECTIVE|PROFESSOR|TEACHER|STUDENT|WAITER|WAITRESS|BELLBOY|JANITOR|MAID|SERVANT|KING|QUEEN|PRINCE|PRINCESS|DUKE|DUCHESS|LORD|LADY|FIRST|SECOND|THIRD|FOURTH|YOUNG|OLD|OLDER|ELDERLY|CHORUS|ENSEMBLE|CROWD|GROUP|OFFSTAGE|ANNOUNCER|NARRATOR|ADDING|FILING|TELEPHONE|DEFENSE|PROSECUTION)\\b.*"
+      RegexTerms.containsAnyWord(RegexTerms.ROLE_WORD)
     );
   }
 
@@ -629,13 +622,13 @@ public class PageFurnitureDetector {
 
     return (
       upper.matches(
-        ".*\\b[A-Z]{2,},?\\s+(NY|CA|IL|MA|TX|PA|WA|OR|CO|DC|UK|USA|US)\\b.*"
+        RegexTerms.US_STATE_SUFFIX
       ) ||
       upper.matches(
-        ".*\\b(STREET|ST|AVENUE|AVE|ROAD|RD|LANE|LN|DRIVE|DR|BOULEVARD|BLVD|COURT|CT|PLACE|PL|SQUARE|SQ|BUILDING|FLOOR|SUITE)\\b.*"
+        RegexTerms.containsAnyWord(RegexTerms.STREET_ADDRESS_TERM)
       ) ||
       upper.matches(
-        ".*\\b(CITY|STATE|COUNTRY|UNITED STATES|UNITED KINGDOM|CANADA|ENGLAND)\\b.*"
+        RegexTerms.containsAnyWord(RegexTerms.COUNTRY_OR_REGION_TERM)
       )
     );
   }

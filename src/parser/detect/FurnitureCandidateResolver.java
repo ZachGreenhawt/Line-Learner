@@ -59,11 +59,7 @@ public class FurnitureCandidateResolver {
     }
 
     String bare = strip(cleaned);
-    if (known(bare, names)) {
-      return true;
-    }
-
-    return SpeakerDetector.looksLike(cleaned) && known(bare, names);
+    return known(bare, names);
   }
 
   private static Set<String> names(Set<String> chars) {

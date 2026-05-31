@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import parser.detect.*;
 import parser.model.ParseModels;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class SpeakerBlockBuilder {
@@ -222,7 +223,7 @@ public class SpeakerBlockBuilder {
       String spoken = removeStageTail(line, knownSpeakers);
 
       if (spoken.isEmpty()) {
-        reason = appendReason(spoken, "source_only_stage");
+        reason = appendReason(reason, "source_only_stage");
         continue;
       }
 
@@ -269,7 +270,7 @@ public class SpeakerBlockBuilder {
         "\\b" +
           Pattern.quote(name) +
           "\\s+(" +
-          RegexTerms.STAGE_TAIL_ACTION +
+          RegexTerms.STAGE_ACTION +
           ")\\b",
         Pattern.CASE_INSENSITIVE
       );
@@ -387,15 +388,15 @@ public class SpeakerBlockBuilder {
       return false;
     }
 
-    if (cleaned.matches("^[A-Z][A-Z0-9'’ -]{1,40}\\.\\s*$")) {
+    if (cleaned.matches(RegexTerms.SPOKEN_ADDRESS_REJECT)) {
       return false;
     }
 
-    if (!cleaned.matches("^[A-Z][a-zA-Z'’\\-]{1,30}\\.\\s+\\S+.*")) {
+    if (!cleaned.matches(RegexTerms.SPOKEN_ADDRESS_SHAPE)) {
       return false;
     }
 
-    return cleaned.split("\\s+").length >= 3;
+    return cleaned.split(RegexTerms.WHITESPACE).length >= 3;
   }
 
   private static ParseModels.Block embeddedBlock(
@@ -491,7 +492,7 @@ public class SpeakerBlockBuilder {
     char first = cleaned.charAt(0);
     return (
       Character.isLowerCase(first) ||
-      cleaned.matches("^(and|but|or|so|because|then)\\b.*")
+      cleaned.matches(RegexTerms.LEADING_CONJUNCTION)
     );
   }
 
@@ -568,7 +569,7 @@ public class SpeakerBlockBuilder {
       lower.contains("scene fades out") ||
       lower.contains("lights fade") ||
       lower.contains("blackout") ||
-      lower.matches("^(enter|exit|exeunt|re-enter|reenter)\\b.*")
+      lower.matches(RegexTerms.ENTER_EXIT_LINE)
     );
   }
 
@@ -580,14 +581,13 @@ public class SpeakerBlockBuilder {
     if (cleaned.contains("?") || cleaned.contains("!")) {
       return false;
     }
-    if (cleaned.matches("^[\"'“‘].*")) {
+    if (cleaned.matches(RegexTerms.STARTS_WITH_QUOTE)) {
       return false;
     }
 
     String lower = cleaned.toLowerCase();
     return lower.matches(
-      "^(he|she|they|we|[a-z][a-z'’\\-]+(?:\\s+[a-z][a-z'’\\-]+){0,3})\\s+" +
-        "(nods|waves|shrugs|smiles|laughs|cries|sighs|sits|stands|rises|turns|crosses|goes|comes|enters|exits|walks|runs|takes|puts|gets|holds|touches|kisses|whispers|stares|looks|pulls|pushes|opens|closes|eats|sips|shows|hands|helps|starts|stops|moves|throws|reads|watches|waits|points|kneels|falls|backs|leans|reaches|begins)\\b.*"
+      RegexTerms.SHORT_ACTION_BEAT
     );
   }
 
@@ -602,11 +602,11 @@ public class SpeakerBlockBuilder {
     String lower = cleaned.toLowerCase();
     int subjects = countMatches(
       lower,
-      "\\b(he|she|they|his|her|their|him|them)\\b"
+      RegexTerms.STAGE_HEAVY_SUBJECT
     );
     int actions = countMatches(
       lower,
-      "\\b(looks|turns|puts|takes|opens|closes|kisses|touches|goes|comes|crosses|moves|walks|sits|stands|rises|falls|holds|pulls|pushes|reaches|leans|stares|watches|throws|carries|brings|lifts|lowers|releases|fastens|closes|clutching|spreads)\\b"
+      RegexTerms.STAGE_HEAVY_ACTION
     );
 
     return subjects >= 2 && actions >= 2;
@@ -634,12 +634,12 @@ public class SpeakerBlockBuilder {
     return (
       cleaned.contains("?") ||
       cleaned.contains("!") ||
-      cleaned.matches("^[\"'“‘].*") ||
+      cleaned.matches(RegexTerms.STARTS_WITH_QUOTE) ||
       lower.matches(
-        "^(and|but|or|because|so)\\b.*\\b(i|i'm|i’ll|i'll|i've|you|you're|we|we're|don't|can't|won't|would|could|should|please|yes|no)\\b.*"
+        RegexTerms.DIALOGUE_CONJUNCTION_PRONOUN
       ) ||
       lower.matches(
-        ".*\\b(i|i'm|i’ll|i'll|i've|you|you're|we|we're|don't|can't|won't|would|could|should|please|yes|no)\\b.*"
+        RegexTerms.DIALOGUE_PRONOUN
       )
     );
   }
@@ -661,13 +661,13 @@ public class SpeakerBlockBuilder {
     }
 
     return (
-      cleaned.matches(".*\\b[A-Z]\\.\\b.*") ||
+      cleaned.matches(RegexTerms.CUE_INITIAL_DOT) ||
       cleaned.matches(
-        ".*\\b[A-Z][a-zA-Z'’ -]{1,30}\\s*[-–—]\\s*[A-Z0-9]\\b.*"
+        RegexTerms.CUE_DASH_PATTERN
       ) ||
-      (cleaned.matches(".*\\d+.*") &&
-        cleaned.matches(".*\\b[A-Za-z][A-Za-z'’]+\\b.*") &&
-        !cleaned.matches("^\\d{1,4}\\s+[A-Z][A-Z'’ -]+$"))
+      (cleaned.matches(RegexTerms.CONTAINS_NUMBER_RUN) &&
+        cleaned.matches(RegexTerms.CONTAINS_LETTER_WORD) &&
+        !cleaned.matches(RegexTerms.LEADING_NUMBER_CAPS_LINE))
     );
   }
 
@@ -703,17 +703,17 @@ public class SpeakerBlockBuilder {
     if (!upper.equals(cleaned)) {
       return false;
     }
-    if (upper.matches(".*\\d{1,4}.*")) {
+    if (upper.matches(RegexTerms.CONTAINS_PAGE_NUMBER)) {
       return true;
     }
 
-    String[] words = upper.split("\\s+");
+    String[] words = upper.split(RegexTerms.WHITESPACE);
     if (words.length < 1 || words.length > 3) {
       return false;
     }
 
     for (String word : words) {
-      if (!word.matches("[A-Z][A-Z'’\\-]{1,}")) {
+      if (!word.matches(RegexTerms.ALL_CAPS_WORD)) {
         return false;
       }
     }
@@ -849,21 +849,21 @@ public class SpeakerBlockBuilder {
       }
 
       String cleaned = TextNormalizer.norm(text).toLowerCase();
-      int words = cleaned.trim().split("\\s+").length;
+      int words = cleaned.trim().split(RegexTerms.WHITESPACE).length;
       if (words >= 12) {
         return true;
       }
 
       if (
         cleaned.matches(
-          "^[a-z][a-z'’\\-]{1,30}\\s+number\\s+[a-z0-9ivxlcdm]+\\.?$"
+          RegexTerms.NARRATIVE_NUMBER
         )
       ) {
         return true;
       }
 
       return cleaned.matches(
-        ".*\\b(years ago|months ago|weeks ago|days ago|morning|afternoon|evening|night|story|remember|once|before|after|when|while|until)\\b.*"
+        RegexTerms.NARRATIVE_TIME
       );
     }
   }

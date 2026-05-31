@@ -12,6 +12,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import parser.detect.PageFurnitureDetector;
+import util.RegexTerms;
 
 public class PdfTextExtractor {
 
@@ -172,7 +173,7 @@ public class PdfTextExtractor {
       .replace('￿', ' ');
 
     StringBuilder out = new StringBuilder();
-    for (String line : cleaned.split("\\R")) {
+    for (String line : cleaned.split(RegexTerms.LINE_BREAK)) {
       String lineText = line == null ? "" : line.trim();
       if (lineText.isEmpty()) {
         blank(out);
@@ -203,7 +204,7 @@ public class PdfTextExtractor {
   }
 
   private static String collapse(String text) {
-    return text.replaceAll("\\n{3,}", "\\n\\n");
+    return text.replaceAll(RegexTerms.NEWLINE_RUN, "\\n\\n");
   }
 
   private static Tesseract makeTesseract() {

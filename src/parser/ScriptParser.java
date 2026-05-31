@@ -10,6 +10,7 @@ import parser.export.CsvExporter;
 import parser.model.ParseModels;
 import parser.session.ParserSessionStore;
 import practice.*;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class ScriptParser {
@@ -141,24 +142,24 @@ public class ScriptParser {
         continue;
       }
 
-      if (looksLikeBodyMarkerForParser(line)) {
+      if (bodyMarkerLine(line)) {
         bodyMarkers++;
         score += 5;
       }
 
-      if (looksLikeStageLineForParser(line, chars)) {
+      if (stageLine(line, chars)) {
         stageSignals++;
         score += 3;
       }
 
-      if (looksLikeSpeakerLineForParser(line, chars)) {
+      if (speakerLine(line, chars)) {
         speakerSignals++;
         score += 4;
       }
 
-      if (looksLikeBodyDialogueLineForParser(line, chars)) {
+      if (bodyDialogueLine(line, chars)) {
         score += 1;
-      } else if (looksLikeFrontMatterProseForParser(line)) {
+      } else if (frontMatterProse(line)) {
         unknownProseSignals++;
         score -= 2;
       }
@@ -209,15 +210,15 @@ public class ScriptParser {
         continue;
       }
 
-      if (looksLikeBodyMarkerForParser(line)) {
+      if (bodyMarkerLine(line)) {
         bodyMarkers++;
       }
 
-      if (looksLikeStageLineForParser(line, chars)) {
+      if (stageLine(line, chars)) {
         stageSignals++;
       }
 
-      if (looksLikeSpeakerLineForParser(line, chars)) {
+      if (speakerLine(line, chars)) {
         speakerSignals++;
       }
     }
@@ -241,7 +242,7 @@ public class ScriptParser {
     int safeIndex = Math.max(0, Math.min(index, lines.size() - 1));
     String current = TextNormalizer.norm(lines.get(safeIndex));
 
-    if (!isBridgeLineForParser(current)) {
+    if (!bridgeLine(current)) {
       return safeIndex;
     }
 
@@ -252,8 +253,8 @@ public class ScriptParser {
       }
 
       if (
-        looksLikeSpeakerLineForParser(previous, chars) ||
-        looksLikeBodyMarkerForParser(previous)
+        speakerLine(previous, chars) ||
+        bodyMarkerLine(previous)
       ) {
         return i;
       }
@@ -262,7 +263,7 @@ public class ScriptParser {
     return safeIndex;
   }
 
-  private static boolean isBridgeLineForParser(String line) {
+  private static boolean bridgeLine(String line) {
     String t = TextNormalizer.norm(line);
     if (t.isEmpty()) {
       return false;
@@ -277,7 +278,7 @@ public class ScriptParser {
     );
   }
 
-  private static boolean looksLikeBodyMarkerForParser(String line) {
+  private static boolean bodyMarkerLine(String line) {
     String upper = TextNormalizer.norm(line).toUpperCase();
     if (upper.isEmpty()) {
       return false;
@@ -289,13 +290,13 @@ public class ScriptParser {
       upper.startsWith("BEFORE THE CURTAIN") ||
       upper.startsWith("SCENE:") ||
       upper.startsWith("SOUNDS:") ||
-      upper.matches("^EPISODE\\s+[A-Z0-9IVX -]+$") ||
-      upper.matches("^ACT\\s+[A-Z0-9IVX -]+$") ||
-      upper.matches("^SCENE\\s+[A-Z0-9IVX -]+$")
+      upper.matches(RegexTerms.EPISODE_HEADING) ||
+      upper.matches(RegexTerms.ACT_HEADING) ||
+      upper.matches(RegexTerms.SCENE_HEADING)
     );
   }
 
-  private static boolean looksLikeStageLineForParser(
+  private static boolean stageLine(
     String line,
     Set<String> chars
   ) {
@@ -316,7 +317,7 @@ public class ScriptParser {
     );
   }
 
-  private static boolean looksLikeSpeakerLineForParser(
+  private static boolean speakerLine(
     String line,
     Set<String> chars
   ) {
@@ -334,7 +335,7 @@ public class ScriptParser {
     );
   }
 
-  private static boolean looksLikeBodyDialogueLineForParser(
+  private static boolean bodyDialogueLine(
     String line,
     Set<String> chars
   ) {
@@ -350,7 +351,7 @@ public class ScriptParser {
     return dialogue(t, chars);
   }
 
-  private static boolean looksLikeFrontMatterProseForParser(String line) {
+  private static boolean frontMatterProse(String line) {
     String t = TextNormalizer.norm(line);
     if (t.length() < 80) {
       return false;
@@ -417,7 +418,7 @@ public class ScriptParser {
       return "current_script";
     }
 
-    String[] lines = scriptText.split("\\R");
+    String[] lines = scriptText.split(RegexTerms.LINE_BREAK);
     for (String line : lines) {
       String cleaned = TextNormalizer.norm(line);
       if (!cleaned.isEmpty() && cleaned.length() <= 60) {

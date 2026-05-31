@@ -3,6 +3,7 @@ package parser.detect;
 import java.util.List;
 import java.util.Set;
 import parser.ScriptParser;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class FrontMatterDetector {
@@ -207,16 +208,16 @@ public class FrontMatterDetector {
       return false;
     }
 
-    String letters = t.replaceAll("[^A-Za-z]", "");
+    String letters = t.replaceAll(RegexTerms.NON_LETTER, "");
     if (letters.length() < 5) {
       return false;
     }
 
     String upper = t.toUpperCase();
     boolean titleCaseWords = t.matches(
-      "^[A-Z][A-Za-z'’\\-]+(?:\\s+[A-Z][A-Za-z'’\\-]+){1,8}$"
+      RegexTerms.TITLE_CASE_LINE
     );
-    boolean mostlyUpper = upper.equals(t) && t.matches(".*[A-Z].*");
+    boolean mostlyUpper = upper.equals(t) && t.matches(RegexTerms.CONTAINS_UPPERCASE);
 
     return ((titleCaseWords || mostlyUpper) && !publicationCredit(t));
   }
@@ -326,12 +327,12 @@ public class FrontMatterDetector {
 
     return (
       lower.matches(
-        ".*\\b(isbn|copyright|all rights|permission|publisher|published|publishing|press|catalogue|cataloging|manufactured|book design|cover art|cover design|directed by|produced by|commissioned by|artistic director|executive director|premiere|licensed|license|licence|royalty|royalties)\\b.*"
+        RegexTerms.containsAnyWord(RegexTerms.FRONT_PUBLICATION_TERM)
       ) ||
       lower.matches(
-        ".*\\b(street|avenue|road|lane|drive|boulevard|suite|floor|building|city|state|country|united states|united kingdom|canada|england)\\b.*"
+        RegexTerms.containsAnyWord(RegexTerms.FRONT_PLACE_TERM)
       ) ||
-      lower.matches(".*\\b(www\\.|\\.com|\\.org|\\.net|@)\\b.*")
+      lower.matches(RegexTerms.containsAnyWord(RegexTerms.WEB_REF_TERM))
     );
   }
 
@@ -342,9 +343,9 @@ public class FrontMatterDetector {
     }
 
     return (
-      lower.matches("^[-–—~]?\\s*[a-z .'-]+,\\s*[a-z .'-]+$") ||
+      lower.matches(RegexTerms.REVIEW_ATTRIBUTION_PAIR) ||
       lower.matches(
-        "^[-–—~]?\\s*[a-z .'-]+\\s+(review|times|tribune|post|journal|magazine|world|weekly|daily|sun|star|news).*$"
+        RegexTerms.REVIEW_ATTRIBUTION_OUTLET
       )
     );
   }
@@ -359,9 +360,9 @@ public class FrontMatterDetector {
       upper.startsWith("SOUNDS:") ||
       upper.startsWith("SCENE:") ||
       upper.startsWith("BEFORE THE CURTAIN") ||
-      upper.matches("^EPISODE\\s+[A-Z0-9IVX -]+$") ||
-      upper.matches("^ACT\\s+[A-Z0-9IVX -]+$") ||
-      upper.matches("^SCENE\\s+[A-Z0-9IVX -]+$")
+      upper.matches(RegexTerms.EPISODE_HEADING) ||
+      upper.matches(RegexTerms.ACT_HEADING) ||
+      upper.matches(RegexTerms.SCENE_HEADING)
     );
   }
 
@@ -390,7 +391,7 @@ public class FrontMatterDetector {
     }
 
     int spaces = t.length() - t.replace(" ", "").length();
-    return spaces >= 9 && t.matches(".*[a-z].*");
+    return spaces >= 9 && t.matches(RegexTerms.CONTAINS_LOWERCASE);
   }
 
   private static boolean stageLine(String line, Set<String> chars) {
@@ -456,7 +457,7 @@ public class FrontMatterDetector {
         continue;
       }
 
-      if (after.matches("^[A-Z][a-z]+(?:\\s+[A-Z][a-zA-Z'’.-]+){0,4}\\.?$")) {
+      if (after.matches(RegexTerms.CAST_PERSON_NAME)) {
         return true;
       }
 
@@ -464,7 +465,7 @@ public class FrontMatterDetector {
         after
           .toLowerCase()
           .matches(
-            ".*\\b(actor|actress|played by|director|understudy|voice of)\\b.*"
+            RegexTerms.containsAnyWord(RegexTerms.CAST_CREDIT_TERM)
           )
       ) {
         return true;
@@ -496,7 +497,7 @@ public class FrontMatterDetector {
       String lower = after.toLowerCase();
       if (
         lower.matches(
-          ".*\\b(husband|wife|daughter|son|father|mother|brother|sister|child|children|narrator|voice|pregnant|doesn't speak|does not speak|years old|year old|inside|grown up|played by|appears as|also plays|described as)\\b.*"
+          RegexTerms.containsAnyWord(RegexTerms.CHARACTER_DESCRIPTION_TERM)
         )
       ) {
         return true;
@@ -513,7 +514,7 @@ public class FrontMatterDetector {
     }
 
     return lower.matches(
-      ".*\\b(directed by|artistic director|executive director|cover art|cover design|book design|published|publisher|copyright|isbn|premiere|produced by|commissioned by)\\b.*"
+      RegexTerms.containsAnyWord(RegexTerms.CREDIT_TERM)
     );
   }
 

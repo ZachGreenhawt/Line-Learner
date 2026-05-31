@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import parser.detect.*;
 import parser.session.ParserSessionStore;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class CharacterExtractor {
@@ -95,7 +96,7 @@ public class CharacterExtractor {
           continue;
         }
 
-        String[] cells = line.split(",", -1);
+        String[] cells = line.split(RegexTerms.COMMA, -1);
         if (cells.length == 0) {
           continue;
         }
@@ -136,7 +137,7 @@ public class CharacterExtractor {
           continue;
         }
 
-        String[] cells = line.split(",", -1);
+        String[] cells = line.split(RegexTerms.COMMA, -1);
         if (cells.length < 2) {
           continue;
         }
@@ -270,29 +271,23 @@ public class CharacterExtractor {
       text = "";
     }
 
-    for (String raw : text.split("\\n")) {
+    for (String raw : text.split(RegexTerms.NEWLINE)) {
       String line = TextNormalizer.norm(raw);
-      if (skipScan(line)) {
+      if (StageDetector.skip(line) || (StageDetector.junk(line) && !heading(line))) {
         continue;
       }
-
       addFromLine(counts, line);
     }
 
     return keep(counts);
   }
 
-  private static boolean skipScan(String line) {
-    if (StageDetector.skip(line)) {
-      return true;
-    }
-    return StageDetector.junk(line) && !heading(line);
-  }
-
   private static void addFromLine(Map<String, Integer> counts, String line) {
     String cleaned = TextNormalizer.norm(line);
 
-    if (addCast(counts, cleaned)) {
+    String role = castRole(cleaned);
+    if (!role.isEmpty()) {
+      addRole(counts, role);
       return;
     }
 
@@ -311,16 +306,6 @@ public class CharacterExtractor {
     addCandidate(counts, cleaned);
   }
 
-  private static boolean addCast(Map<String, Integer> counts, String line) {
-    String candidate = castRole(line);
-    if (candidate.isEmpty()) {
-      return false;
-    }
-
-    addRole(counts, candidate);
-    return true;
-  }
-
   private static String castRole(String line) {
     String cleaned = TextNormalizer.norm(line);
     if (cleaned.isEmpty()) {
@@ -328,7 +313,7 @@ public class CharacterExtractor {
     }
 
     String withoutActor = cleaned
-      .replaceFirst("(?i)\\s+ACTOR\\s+\\d+\\s*$", "")
+      .replaceFirst(RegexTerms.ACTOR_SUFFIX, "")
       .trim();
     if (!withoutActor.equals(cleaned) && roleName(withoutActor)) {
       return withoutActor;
@@ -347,13 +332,13 @@ public class CharacterExtractor {
       return false;
     }
 
-    String[] words = clean.split("\\s+");
+    String[] words = clean.split(RegexTerms.WHITESPACE);
     if (words.length > MAX_NAME_WORDS + 1) {
       return false;
     }
 
     if (clean.contains("/")) {
-      String[] parts = clean.split("\\s*/\\s*");
+      String[] parts = clean.split(RegexTerms.WHITESPACE_AROUND_SLASH);
       if (parts.length < 2) {
         return false;
       }
@@ -366,16 +351,10 @@ public class CharacterExtractor {
     }
 
     boolean hasRoleWord = roleWord(clean) || functionRole(clean);
-    boolean hasNumber = clean.matches(".*\\b\\d{1,3}\\b.*");
-    boolean ordinalPrefixed = clean.matches(
-      "(?i)^(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH)\\s+[A-Z][A-Za-z0-9 .'’\\-]{1,50}$"
-    );
-    boolean numberedSuffix = clean.matches(
-      "(?i)^[A-Z][A-Za-z0-9 .'’\\-]{1,50}\\s+(ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)$"
-    );
-    boolean articlePrefixed = clean.matches(
-      "(?i)^(A|AN|THE)\\s+[A-Z][A-Za-z0-9 .'’\\-]{1,50}$"
-    );
+    boolean hasNumber = clean.matches(RegexTerms.CONTAINS_SMALL_NUMBER);
+    boolean ordinalPrefixed = clean.matches(RegexTerms.ORDINAL_PREFIXED_NAME);
+    boolean numberedSuffix = clean.matches(RegexTerms.NUMBER_WORD_SUFFIX_NAME);
+    boolean articlePrefixed = clean.matches(RegexTerms.ARTICLE_PREFIXED_NAME);
 
     if (
       !(hasRoleWord ||
@@ -480,7 +459,7 @@ public class CharacterExtractor {
       return true;
     }
 
-    String[] w = n.split("\\s+");
+    String[] w = n.split(RegexTerms.WHITESPACE);
 
     if (
       w.length >= 2 &&
@@ -490,7 +469,9 @@ public class CharacterExtractor {
     }
 
     if (
-      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_DIALOGUE_PRONOUN))
+      n.matches(
+        RegexTerms.containsAnyWord(RegexTerms.CHARACTER_DIALOGUE_PRONOUN)
+      )
     ) {
       return true;
     }
@@ -502,7 +483,7 @@ public class CharacterExtractor {
     }
 
     if (
-      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_STAGE_ACTION))
+      n.matches(RegexTerms.containsAnyWordIgnoreCase(RegexTerms.STAGE_ACTION))
     ) {
       return true;
     }
@@ -513,7 +494,9 @@ public class CharacterExtractor {
 
     if (
       w.length >= 3 &&
-      n.matches(RegexTerms.containsAnyWord(RegexTerms.CHARACTER_NAME_CONNECTOR)) &&
+      n.matches(
+        RegexTerms.containsAnyWord(RegexTerms.CHARACTER_NAME_CONNECTOR)
+      ) &&
       !rolePhrase(n)
     ) {
       return true;
@@ -546,7 +529,7 @@ public class CharacterExtractor {
 
   private static boolean tooManyWords(String raw) {
     int words = 0;
-    for (String word : raw.split("\\s+")) {
+    for (String word : raw.split(RegexTerms.WHITESPACE)) {
       if (!word.isBlank()) {
         words++;
       }
@@ -609,7 +592,7 @@ public class CharacterExtractor {
     Map<String, Integer> counts
   ) {
     name = TextNormalizer.cleanName(name);
-    String[] words = name.split("\\s+");
+    String[] words = name.split(RegexTerms.WHITESPACE);
     boolean flexibleRoleName = roleName(name);
     int requiredCount = flexibleRoleName ? 1 : 2;
 
@@ -645,17 +628,21 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches(RegexTerms.containsAnyWord(RegexTerms.AUTHOR_PUBLISHER_TERM))
+      upper.matches(
+        RegexTerms.containsAnyWord(RegexTerms.AUTHOR_PUBLISHER_TERM)
+      )
     ) {
       return true;
     }
 
-    if (looksLikeAddressOrPublicationPlace(upper)) {
+    if (addressOrPlace(upper)) {
       return true;
     }
 
     if (
-      upper.matches(RegexTerms.containsAnyWord(RegexTerms.AUTHOR_PUBLISHER_PHRASE))
+      upper.matches(
+        RegexTerms.containsAnyWord(RegexTerms.AUTHOR_PUBLISHER_PHRASE)
+      )
     ) {
       return true;
     }
@@ -674,21 +661,21 @@ public class CharacterExtractor {
     );
   }
 
-  private static boolean looksLikeAddressOrPublicationPlace(String upper) {
+  private static boolean addressOrPlace(String upper) {
     if (upper == null || upper.isBlank()) {
       return false;
     }
 
     if (
       upper.matches(
-        ".*\\b[A-Z][A-Z]+,?\\s+(NY|CA|IL|MA|TX|PA|WA|OR|CO|DC|UK|USA|US)\\b.*"
+        RegexTerms.US_STATE_SUFFIX
       )
     ) {
       return true;
     }
 
     if (
-      upper.matches(".*\\b(NEW|OLD|NORTH|SOUTH|EAST|WEST)\\s+[A-Z]{3,}\\b.*") &&
+      upper.matches(RegexTerms.DIRECTION_PLACE) &&
       !roleWord(upper) &&
       !functionRole(upper)
     ) {
@@ -702,7 +689,9 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches(RegexTerms.containsAnyWord(RegexTerms.COUNTRY_OR_REGION_TERM))
+      upper.matches(
+        RegexTerms.containsAnyWord(RegexTerms.COUNTRY_OR_REGION_TERM)
+      )
     ) {
       return true;
     }
@@ -720,7 +709,7 @@ public class CharacterExtractor {
       return false;
     }
 
-    String[] words = clean.split("\\s+");
+    String[] words = clean.split(RegexTerms.WHITESPACE);
     if (words.length < 2 || words.length > 3) {
       return false;
     }
@@ -731,7 +720,7 @@ public class CharacterExtractor {
 
     int titleCaseWords = 0;
     for (String word : words) {
-      if (word.matches("[A-Z][a-zA-Z'’.-]+")) {
+      if (word.matches(RegexTerms.TITLE_CASE_WORD)) {
         titleCaseWords++;
       }
     }
@@ -748,13 +737,15 @@ public class CharacterExtractor {
     String upper = clean.toUpperCase();
 
     if (
-      upper.matches(".*\\d{1,4}.*") && !roleWord(upper) && !functionRole(upper)
+      upper.matches(RegexTerms.CONTAINS_PAGE_NUMBER) &&
+      !roleWord(upper) &&
+      !functionRole(upper)
     ) {
       return true;
     }
 
     if (
-      upper.matches("^[A-Z]+$") &&
+      upper.matches(RegexTerms.ALL_CAPS_ONE_WORD) &&
       upper.length() > 10 &&
       !roleWord(upper) &&
       !functionRole(upper)
@@ -763,7 +754,7 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches("^[A-Z]+\\s+[A-Z]+$") &&
+      upper.matches(RegexTerms.ALL_CAPS_TWO_WORDS) &&
       !roleWord(upper) &&
       !functionRole(upper)
     ) {
@@ -771,7 +762,7 @@ public class CharacterExtractor {
     }
 
     if (
-      upper.matches("^[A-Z]+\\s+[A-Z]+\\s+[A-Z]+$") &&
+      upper.matches(RegexTerms.ALL_CAPS_THREE_WORDS) &&
       !roleWord(upper) &&
       !functionRole(upper)
     ) {
@@ -784,12 +775,12 @@ public class CharacterExtractor {
   private static boolean roleWord(String name) {
     String upper = TextNormalizer.cleanName(name).toUpperCase();
     return upper.matches(
-      RegexTerms.containsAnyWord(RegexTerms.CHARACTER_ROLE_WORD)
+      RegexTerms.containsAnyWord(RegexTerms.ROLE_WORD)
     );
   }
 
   private static boolean repeated(String name) {
-    String[] words = TextNormalizer.cleanName(name).split("\\s+");
+    String[] words = TextNormalizer.cleanName(name).split(RegexTerms.WHITESPACE);
 
     if (words.length == 2) {
       return words[0].equals(words[1]);
@@ -804,7 +795,7 @@ public class CharacterExtractor {
     String name,
     Map<String, Integer> counts
   ) {
-    String[] words = TextNormalizer.cleanName(name).split("\\s+");
+    String[] words = TextNormalizer.cleanName(name).split(RegexTerms.WHITESPACE);
     if (words.length < 2 || words.length > MAX_NAME_WORDS) {
       return false;
     }
@@ -844,50 +835,34 @@ public class CharacterExtractor {
     }
 
     for (String raw : names) {
-      addExpandedNameForms(result, raw);
+      String name = TextNormalizer.cleanName(raw);
+      if (name.isEmpty()) {
+        continue;
+      }
+      result.add(name);
+
+      String noAction = dropLeadAction(name);
+      if (!noAction.equals(name) && !noAction.isEmpty()) {
+        result.add(noAction);
+      }
+
+      String noDots = name.replace(".", "");
+      if (!noDots.equals(name) && !noDots.isEmpty()) {
+        result.add(noDots);
+      }
+
+      String[] slashParts = name.split(RegexTerms.WHITESPACE_AROUND_SLASH);
+      if (slashParts.length > 1) {
+        for (String part : slashParts) {
+          String cleaned = TextNormalizer.cleanName(part);
+          if (!cleaned.isEmpty()) {
+            result.add(cleaned);
+          }
+        }
+      }
     }
 
     return result;
-  }
-
-  private static void addExpandedNameForms(Set<String> result, String raw) {
-    String name = TextNormalizer.cleanName(raw);
-    if (name.isEmpty()) {
-      return;
-    }
-
-    result.add(name);
-    addWithoutLeadAction(result, name);
-    addWithoutDots(result, name);
-    addSlashParts(result, name);
-  }
-
-  private static void addWithoutLeadAction(Set<String> result, String name) {
-    String noAction = dropLeadAction(name);
-    if (!noAction.equals(name) && !noAction.isEmpty()) {
-      result.add(noAction);
-    }
-  }
-
-  private static void addWithoutDots(Set<String> result, String name) {
-    String noDots = name.replace(".", "");
-    if (!noDots.equals(name) && !noDots.isEmpty()) {
-      result.add(noDots);
-    }
-  }
-
-  private static void addSlashParts(Set<String> result, String name) {
-    String[] slashParts = name.split("\\s*/\\s*");
-    if (slashParts.length <= 1) {
-      return;
-    }
-
-    for (String part : slashParts) {
-      String cleaned = TextNormalizer.cleanName(part);
-      if (!cleaned.isEmpty()) {
-        result.add(cleaned);
-      }
-    }
   }
 
   public static List<String> sort(Set<String> names) {
@@ -926,6 +901,6 @@ public class CharacterExtractor {
   }
 
   private static String compactName(String name) {
-    return name.replaceAll("[^A-Z0-9]", "");
+    return name.replaceAll(RegexTerms.NON_ALNUM_UPPER, "");
   }
 }

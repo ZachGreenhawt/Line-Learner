@@ -167,11 +167,7 @@ public class OcrRunProfile {
       return false;
     }
 
-    if (candidate.tokens >= 4) {
-      return false;
-    }
-
-    return true;
+    return candidate.tokens < 4;
   }
 
   private boolean strongAccept(OcrCandidate candidate) {

@@ -11,6 +11,7 @@ import java.util.Scanner;
 import ocr.PdfTextExtractor;
 import parser.export.CsvExporter;
 import parser.session.ParserSessionStore;
+import util.RegexTerms;
 
 public class ScriptLoader {
 
@@ -212,7 +213,7 @@ public class ScriptLoader {
     if (text == null || text.isEmpty()) {
       return "";
     }
-    return text.replaceAll("(?m)([A-Za-z]{2,})-\\h*\\n\\h*([a-z]{2,})", "$1$2");
+    return text.replaceAll(RegexTerms.HYPHEN_LINE_WRAP, "$1$2");
   }
 
   private static String splitMarkers(String text) {
@@ -256,7 +257,7 @@ public class ScriptLoader {
       return "";
     }
 
-    String[] lines = text.split("\n", -1);
+    String[] lines = text.split(RegexTerms.NEWLINE_CHAR, -1);
     List<String> out = new ArrayList<>();
 
     for (int i = 0; i < lines.length; i++) {
@@ -311,7 +312,7 @@ public class ScriptLoader {
     if (t.length() < 2 || t.length() > 24) {
       return false;
     }
-    if (!t.matches("[A-Z][A-Z .'-]*")) {
+    if (!t.matches(RegexTerms.CAPS_NAME_PART)) {
       return false;
     }
 
@@ -337,7 +338,7 @@ public class ScriptLoader {
     if (name.length() > 45) {
       return false;
     }
-    if (!name.matches("[A-Z][A-Z0-9 .'-]+")) {
+    if (!name.matches(RegexTerms.CAPS_ALNUM_NAME)) {
       return false;
     }
     if (parts.size() < 2 || parts.size() > 4) {
@@ -345,8 +346,10 @@ public class ScriptLoader {
     }
 
     for (String part : parts) {
-      String cleaned = part == null ? "" : part.replaceAll("[^A-Z0-9']", "");
-      if (cleaned.length() <= 1 && !cleaned.matches("[0-9]+")) {
+      String cleaned = part == null
+        ? ""
+        : part.replaceAll(RegexTerms.NON_ALNUM_UPPER_QUOTE, "");
+      if (cleaned.length() <= 1 && !cleaned.matches(RegexTerms.DIGITS_ONLY)) {
         return false;
       }
     }
@@ -410,6 +413,6 @@ public class ScriptLoader {
     if (text == null || text.isEmpty()) {
       return "";
     }
-    return text.replaceAll("\\n{3,}", "\n\n");
+    return text.replaceAll(RegexTerms.NEWLINE_RUN, "\n\n");
   }
 }

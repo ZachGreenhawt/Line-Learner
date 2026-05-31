@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
 import parser.detect.StageDetector;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class ParserPrompts {
@@ -70,7 +71,7 @@ public class ParserPrompts {
       return;
     }
 
-    for (String part : input.split(",")) {
+    for (String part : input.split(RegexTerms.COMMA)) {
       String name = TextNormalizer.cleanName(part);
       if (!name.isEmpty()) {
         names.add(name);
@@ -120,7 +121,7 @@ public class ParserPrompts {
       return out;
     }
 
-    for (String part : input.split(",")) {
+    for (String part : input.split(RegexTerms.COMMA)) {
       try {
         int n = Integer.parseInt(part.trim());
         if (n >= 1 && n <= max) {
@@ -136,8 +137,8 @@ public class ParserPrompts {
       return;
     }
 
-    for (String edit : input.split(",")) {
-      String[] pair = edit.split("=", 2);
+    for (String edit : input.split(RegexTerms.COMMA)) {
+      String[] pair = edit.split(RegexTerms.EQUALS, 2);
       if (pair.length != 2) {
         continue;
       }

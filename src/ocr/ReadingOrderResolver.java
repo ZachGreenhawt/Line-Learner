@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import ocr.model.*;
+import util.RegexTerms;
 
 public class ReadingOrderResolver {
 
@@ -142,7 +143,7 @@ public class ReadingOrderResolver {
     if (text == null || text.isBlank()) {
       return "";
     }
-    return text.replaceAll("\n{3,}", "\n\n");
+    return text.replaceAll(RegexTerms.NEWLINE_RUN_CHAR, "\n\n");
   }
 
   public enum Source {

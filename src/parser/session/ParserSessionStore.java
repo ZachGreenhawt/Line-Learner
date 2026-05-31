@@ -2,6 +2,7 @@ package parser.session;
 
 import java.io.*;
 import java.nio.file.*;
+import util.RegexTerms;
 
 public class ParserSessionStore {
 
@@ -69,8 +70,8 @@ public class ParserSessionStore {
 
   private static String cleanSessionName(String name) {
     String cleaned = name == null ? "" : name.trim();
-    cleaned = cleaned.replaceAll("\\.[^.]+$", "");
-    cleaned = cleaned.replaceAll("[^A-Za-z0-9._-]", "_");
+    cleaned = cleaned.replaceAll(RegexTerms.EXTENSION_SUFFIX, "");
+    cleaned = cleaned.replaceAll(RegexTerms.NON_SESSION_NAME_CHAR, "_");
     return cleaned.isEmpty() ? "current_script" : cleaned;
   }
 }

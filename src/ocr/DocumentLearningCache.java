@@ -12,6 +12,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
 import ocr.model.*;
+import util.RegexTerms;
 
 public class DocumentLearningCache {
 
@@ -310,7 +311,7 @@ public class DocumentLearningCache {
         return null;
       }
 
-      String[] parts = line.split("\t", -1);
+      String[] parts = line.split(RegexTerms.TAB, -1);
       if (parts.length < 9 || !VERSION.equals(parts[0])) {
         return null;
       }

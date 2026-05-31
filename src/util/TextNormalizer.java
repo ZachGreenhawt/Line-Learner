@@ -2,14 +2,11 @@ package util;
 
 public class TextNormalizer {
 
-  private static final String INVISIBLE_CHARS =
-    "[\\u200B\\u200C\\u200D\\uFEFF]";
-
   public static String norm(String text) {
     if (text == null) {
       return "";
     }
-    return text.strip().replaceAll("\\s+", " ");
+    return text.strip().replaceAll(RegexTerms.WHITESPACE, " ");
   }
 
   public static String cleanName(String text) {
@@ -19,9 +16,9 @@ public class TextNormalizer {
 
   public static String rawHeadingName(String text) {
     String out = norm(text);
-    out = out.replaceAll(INVISIBLE_CHARS, "");
-    out = out.replaceAll("\\s*/\\s*", " / ");
-    out = out.replaceAll("\\s+", " ").trim();
+    out = out.replaceAll(RegexTerms.INVISIBLE_CHARS, "");
+    out = out.replaceAll(RegexTerms.WHITESPACE_AROUND_SLASH, " / ");
+    out = out.replaceAll(RegexTerms.WHITESPACE, " ").trim();
     return stripTrailingSpeakerPunctuation(out);
   }
 
@@ -57,28 +54,49 @@ public class TextNormalizer {
     return norm(out);
   }
 
+  public static String stripLeadingParentheticals(String text) {
+    String out = norm(text);
+
+    while (!out.isEmpty()) {
+      String close;
+      if (out.startsWith("(")) {
+        close = ")";
+      } else if (out.startsWith("[")) {
+        close = "]";
+      } else if (out.startsWith("{")) {
+        close = "}";
+      } else {
+        break;
+      }
+
+      int end = out.indexOf(close);
+      if (end < 0) {
+        break;
+      }
+      out = norm(out.substring(end + 1));
+    }
+
+    return out;
+  }
+
   private static String removeLeadingParentheticals(String text) {
     String out = norm(text);
-    boolean changed = true;
 
-    while (changed && !out.isEmpty()) {
-      changed = false;
-
+    while (!out.isEmpty()) {
+      String close;
       if (out.startsWith("(")) {
-        int close = out.indexOf(")");
-        if (close < 0) {
-          return "";
-        }
-        out = norm(out.substring(close + 1));
-        changed = true;
+        close = ")";
       } else if (out.startsWith("[")) {
-        int close = out.indexOf("]");
-        if (close < 0) {
-          return "";
-        }
-        out = norm(out.substring(close + 1));
-        changed = true;
+        close = "]";
+      } else {
+        break;
       }
+
+      int end = out.indexOf(close);
+      if (end < 0) {
+        return "";
+      }
+      out = norm(out.substring(end + 1));
     }
 
     return out;

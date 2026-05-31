@@ -3,6 +3,7 @@ package ocr;
 import java.util.HashSet;
 import java.util.Set;
 import ocr.model.OcrCandidate;
+import util.RegexTerms;
 
 public class OcrCandidateScorer {
 
@@ -181,7 +182,7 @@ public class OcrCandidateScorer {
     int stage = 0;
     int splitSpeakerLines = 0;
 
-    String[] lines = text.split("\\R");
+    String[] lines = text.split(RegexTerms.LINE_BREAK);
 
     int nonEmptyLines = 0;
 
@@ -506,7 +507,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    String[] tokens = text.toUpperCase().split("[^A-Z]+");
+    String[] tokens = text.toUpperCase().split(RegexTerms.NON_CAPS_RUN);
     int usable = 0;
     int suspicious = 0;
 
@@ -550,7 +551,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    String lettersOnly = line.replaceAll("[^A-Za-z]", "");
+    String lettersOnly = line.replaceAll(RegexTerms.NON_LETTER, "");
 
     if (lettersOnly.length() < 2) {
       return false;
@@ -565,9 +566,9 @@ public class OcrCandidateScorer {
     }
 
     return (
-      line.matches("^[A-Z0-9 ./'\\-]+$") &&
+      line.matches(RegexTerms.CAPS_ALNUM_LINE) &&
       line.equals(line.toUpperCase()) &&
-      line.matches(".*[A-Z].*") &&
+      line.matches(RegexTerms.CONTAINS_UPPERCASE) &&
       vowelRatio(lettersOnly) >= 0.22
     );
   }
@@ -575,8 +576,8 @@ public class OcrCandidateScorer {
   private static boolean dialogue(String line) {
     return (
       line.length() > 20 &&
-      line.matches(".*[a-z].*") &&
-      line.matches(".*[aeiouAEIOU].*") &&
+      line.matches(RegexTerms.CONTAINS_LOWERCASE) &&
+      line.matches(RegexTerms.CONTAINS_VOWEL) &&
       !upsideDown(line) &&
       !edgeNoise(line) &&
       !furniture(line)
@@ -592,7 +593,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    String lettersOnly = line.replaceAll("[^A-Za-z]", "");
+    String lettersOnly = line.replaceAll(RegexTerms.NON_LETTER, "");
 
     if (lettersOnly.length() < 8) {
       return false;
@@ -608,7 +609,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    return (english(line) >= 0.08 || line.matches(".*\\b[A-Z][a-z]{2,}\\b.*"));
+    return (english(line) >= 0.08 || line.matches(RegexTerms.CONTAINS_TITLE_WORD));
   }
 
   private static boolean junk(String line) {
@@ -620,7 +621,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    String compactLetters = line.replaceAll("[^A-Za-z]", "");
+    String compactLetters = line.replaceAll(RegexTerms.NON_LETTER, "");
 
     if (compactLetters.length() >= 8 && vowels(compactLetters) == 0) {
       return true;
@@ -661,17 +662,17 @@ public class OcrCandidateScorer {
     String t = line.trim();
     String upper = t.toUpperCase();
 
-    if (upper.matches("^\\d{1,4}$")) {
+    if (upper.matches(RegexTerms.PAGE_NUMBER_ONLY)) {
       return true;
     }
 
-    if (upper.matches("^PAGE\\s+\\d{1,4}$")) {
+    if (upper.matches(RegexTerms.PAGE_LABEL)) {
       return true;
     }
 
     if (
       upper.matches(
-        "^[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}\\s+\\d{1,4}$"
+        RegexTerms.CAPS_WORDS_THEN_NUMBER
       )
     ) {
       return true;
@@ -679,25 +680,17 @@ public class OcrCandidateScorer {
 
     if (
       upper.matches(
-        "^\\d{1,4}\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}$"
+        RegexTerms.NUMBER_THEN_CAPS_WORDS
       )
     ) {
       return true;
     }
 
-    if (upper.matches(".*\\bISBN\\b.*")) {
-      return true;
-    }
-
-    if (upper.matches(".*\\bWWW\\..*")) {
-      return true;
-    }
-
-    if (upper.matches(".*\\.(COM|ORG|NET|CO\\.UK)\\b.*")) {
-      return true;
-    }
-
-    return false;
+    return (
+      upper.matches(RegexTerms.CONTAINS_ISBN_CI) ||
+      upper.matches(RegexTerms.CONTAINS_WWW_CI) ||
+      upper.matches(RegexTerms.CONTAINS_WEB_TLD_CI)
+    );
   }
 
   private static boolean clipped(String line) {
@@ -716,13 +709,13 @@ public class OcrCandidateScorer {
     }
 
     boolean startsAbruptly =
-      t.matches("^[a-z][a-z]+\\b.*") || t.matches("^[,.;:!?)]\\s*.*");
+      t.matches(RegexTerms.LOWER_WORD_START) || t.matches(RegexTerms.PUNCT_START);
 
     boolean endsAbruptly =
-      t.matches(".*\\b[a-zA-Z]{1,3}[-–—]$|.*\\b[a-zA-Z]{1,2}$") &&
-      !t.matches(".*[.!?\")']$.*");
+      t.matches(RegexTerms.SHORT_WORD_DASH_END) &&
+      !t.matches(RegexTerms.ENDS_SENTENCE_PUNCT);
 
-    boolean hasEnoughLetters = t.replaceAll("[^A-Za-z]", "").length() >= 10;
+    boolean hasEnoughLetters = t.replaceAll(RegexTerms.NON_LETTER, "").length() >= 10;
 
     return hasEnoughLetters && (startsAbruptly || endsAbruptly);
   }
@@ -767,7 +760,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    String lettersOnly = t.replaceAll("[^A-Za-z]", "");
+    String lettersOnly = t.replaceAll(RegexTerms.NON_LETTER, "");
     if (lettersOnly.length() < 3) {
       return false;
     }
@@ -782,7 +775,7 @@ public class OcrCandidateScorer {
 
     return (
       vowelRatio(lettersOnly) < 0.20 ||
-      lettersOnly.matches(".*[BCDFGHJKLMNPQRSTVWXYZ]{4,}.*")
+      lettersOnly.matches(RegexTerms.CONSONANT_RUN_4)
     );
   }
 
@@ -792,7 +785,7 @@ public class OcrCandidateScorer {
     }
 
     String upper = line.toUpperCase();
-    String[] tokens = upper.split("[^A-Z]+");
+    String[] tokens = upper.split(RegexTerms.NON_CAPS_RUN);
 
     int suspiciousTokens = 0;
     int usableTokens = 0;
@@ -974,7 +967,7 @@ public class OcrCandidateScorer {
       return false;
     }
 
-    String compact = line.replaceAll("\\s+", "");
+    String compact = line.replaceAll(RegexTerms.WHITESPACE, "");
 
     if (compact.length() < 8) {
       return false;
@@ -1003,8 +996,8 @@ public class OcrCandidateScorer {
       upper.contains("EEEE") ||
       upper.contains("TEE") ||
       upper.contains("EET") ||
-      upper.matches(".*[-_=]{4,}.*") ||
-      upper.matches(".*[A-Z]{1,3}[-_=]{2,}[A-Z]{1,3}.*")
+      upper.matches(RegexTerms.DASH_RUN) ||
+      upper.matches(RegexTerms.CAPS_DASH_CAPS)
     );
   }
 
@@ -1015,8 +1008,8 @@ public class OcrCandidateScorer {
 
     String[] tokens = text
       .toLowerCase()
-      .replaceAll("[^a-z']", " ")
-      .split("\\s+");
+      .replaceAll(RegexTerms.NON_LOWER_QUOTE, " ")
+      .split(RegexTerms.WHITESPACE);
 
     int total = 0;
     int common = 0;
@@ -1126,7 +1119,7 @@ public class OcrCandidateScorer {
         continue;
       }
 
-      String lettersOnly = line.replaceAll("[^A-Za-z]", "");
+      String lettersOnly = line.replaceAll(RegexTerms.NON_LETTER, "");
 
       if (
         lettersOnly.length() >= 2 &&
@@ -1158,7 +1151,7 @@ public class OcrCandidateScorer {
         line.startsWith("(") ||
         line.endsWith(")") ||
         lower.matches(
-          ".*\\b(enters|exits|crosses|sits|stands|looks|nods|shakes|pause|beat|silence)\\b.*"
+          RegexTerms.OCR_STAGE_HINT
         )
       ) {
         count++;
@@ -1175,8 +1168,8 @@ public class OcrCandidateScorer {
 
     String[] tokens = text
       .toLowerCase()
-      .replaceAll("[^a-z']", " ")
-      .split("\\s+");
+      .replaceAll(RegexTerms.NON_LOWER_QUOTE, " ")
+      .split(RegexTerms.WHITESPACE);
 
     int count = 0;
 
@@ -1196,7 +1189,7 @@ public class OcrCandidateScorer {
       return 0;
     }
 
-    String[] tokens = text.toUpperCase().split("[^A-Z]+");
+    String[] tokens = text.toUpperCase().split(RegexTerms.NON_CAPS_RUN);
     int count = 0;
 
     for (String token : tokens) {

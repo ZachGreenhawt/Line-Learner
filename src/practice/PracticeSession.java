@@ -3,6 +3,7 @@ package practice;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import util.RegexTerms;
 
 public class PracticeSession {
 
@@ -17,18 +18,36 @@ public class PracticeSession {
     retryLines.clear();
     retryCues.clear();
 
+    List<String> cues = new ArrayList<>();
+    List<String> lines = new ArrayList<>();
+    for (int i = 0; i < parsed.size(); i++) {
+      cues.add(parsed.getCue(i));
+      lines.add(parsed.getCharLine(i));
+    }
+
+    practiceRound(cues, lines, settings, sc, wrongCues, wrongLines);
+  }
+
+  private static void practiceRound(
+    List<String> cues,
+    List<String> lines,
+    Settings settings,
+    Scanner sc,
+    List<String> missedCues,
+    List<String> missedLines
+  ) {
     boolean timed = settings.timedMode();
     int r = 0;
     int w = 0;
     long sessionStartMs = timed ? System.currentTimeMillis() : 0;
-    for (int i = 0; i < parsed.size(); i++) {
+    for (int i = 0; i < lines.size(); i++) {
       long lineStartMs = timed ? System.currentTimeMillis() : 0;
-      String cue = parsed.getCue(i);
-      String expected = parsed.getCharLine(i);
+      String cue = cues.get(i);
+      String expected = lines.get(i);
 
       System.out.println("Cue line: " + cue);
       System.out.println(
-        "[" + (i + 1) + "/" + parsed.size() + "] What is your line?"
+        "[" + (i + 1) + "/" + lines.size() + "] What is your line?"
       );
       String answer = sc.nextLine();
       if (timed) {
@@ -44,8 +63,8 @@ public class PracticeSession {
         w++;
         System.out.println("You are wrong!");
         System.out.println("The correct line was: " + expected);
-        wrongCues.add(cue);
-        wrongLines.add(expected);
+        missedCues.add(cue);
+        missedLines.add(expected);
       }
     }
     printStats(r, w);
@@ -58,42 +77,11 @@ public class PracticeSession {
   }
 
   public static void retryWrong(Settings settings, Scanner sc) {
-    boolean timed = settings.timedMode();
-    int r = 0;
-    int w = 0;
-    long sessionStartMs = timed ? System.currentTimeMillis() : 0;
-    for (int i = 0; i < wrongLines.size(); i++) {
-      long lineStartMs = timed ? System.currentTimeMillis() : 0;
-      System.out.println("Cue line: " + wrongCues.get(i));
-      System.out.println(
-        "[" + (i + 1) + "/" + wrongLines.size() + "] What is your line?"
-      );
-      String answer = sc.nextLine();
-      if (timed) {
-        long lineElapsedMs = System.currentTimeMillis() - lineStartMs;
-        System.out.println(
-          "Time for this line: " + (lineElapsedMs / 1000.0) + "s"
-        );
-      }
-      String expected = wrongLines.get(i);
-      if (matches(answer, expected, settings)) {
-        r++;
-        System.out.println("You are correct!");
-      } else {
-        w++;
-        System.out.println("You are wrong!");
-        System.out.println("The correct line was: " + expected);
-        retryCues.add(wrongCues.get(i));
-        retryLines.add(expected);
-      }
-    }
-    printStats(r, w);
-    if (timed) {
-      long sessionElapsedMs = System.currentTimeMillis() - sessionStartMs;
-      System.out.println(
-        "Total session time: " + (sessionElapsedMs / 1000.0) + "s"
-      );
-    }
+    List<String> cues = new ArrayList<>(wrongCues);
+    List<String> lines = new ArrayList<>(wrongLines);
+
+    practiceRound(cues, lines, settings, sc, retryCues, retryLines);
+
     wrongLines.addAll(retryLines);
     wrongCues.addAll(retryCues);
     retryLines.clear();
@@ -114,7 +102,7 @@ public class PracticeSession {
       value = value.toLowerCase();
     }
     if (!settings.punctuation()) {
-      value = value.replaceAll("\\p{Punct}", "").strip();
+      value = value.replaceAll(RegexTerms.PUNCTUATION_CLASS, "").strip();
     }
     return value;
   }

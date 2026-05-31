@@ -7,6 +7,7 @@ import parser.ScriptPreProcess;
 import practice.ParsedScript;
 import practice.PracticeSession;
 import practice.Settings;
+import util.RegexTerms;
 
 public class Main {
 
@@ -73,7 +74,7 @@ public class Main {
     if (input.isEmpty()) return text;
 
     String cleaned = text;
-    String[] phrases = input.split(",");
+    String[] phrases = input.split(RegexTerms.COMMA);
 
     for (String phrase : phrases) {
       phrase = phrase.trim();
@@ -89,6 +90,9 @@ public class Main {
     if (text == null || text.isBlank()) return "";
     if (phrase == null || phrase.isBlank()) return text;
 
-    return text.replaceAll("(?i)" + java.util.regex.Pattern.quote(phrase), " ");
+    return text.replaceAll(
+      RegexTerms.CASE_INSENSITIVE_FLAG + java.util.regex.Pattern.quote(phrase),
+      " "
+    );
   }
 }

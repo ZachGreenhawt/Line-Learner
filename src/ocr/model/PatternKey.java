@@ -3,6 +3,7 @@ package ocr.model;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import util.RegexTerms;
 
 public class PatternKey {
 
@@ -174,7 +175,7 @@ public class PatternKey {
     int caps = 0;
     int lines = 0;
 
-    for (String raw : text.split("\\R")) {
+    for (String raw : text.split(RegexTerms.LINE_BREAK)) {
       String line = raw == null ? "" : raw.trim();
 
       if (line.isEmpty()) {
@@ -185,10 +186,10 @@ public class PatternKey {
 
       boolean shortCaps =
         line.length() <= 35 &&
-        line.matches(".*[A-Z].*") &&
+        line.matches(RegexTerms.CONTAINS_UPPERCASE) &&
         line.equals(line.toUpperCase());
 
-      if (shortCaps && line.matches("^[A-Z0-9 ./'\\-]+$")) {
+      if (shortCaps && line.matches(RegexTerms.CAPS_ALNUM_LINE)) {
         caps++;
       }
 
@@ -198,9 +199,9 @@ public class PatternKey {
 
       boolean proseLine =
         line.length() >= 60 &&
-        line.matches(".*[a-z].*") &&
+        line.matches(RegexTerms.CONTAINS_LOWERCASE) &&
         line.matches(
-          ".*\\b(the|and|that|with|this|was|for|you|she|he|they)\\b.*"
+          RegexTerms.PROSE_FUNCTION_WORD
         );
 
       if (proseLine) {

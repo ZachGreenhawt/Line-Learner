@@ -6,30 +6,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import parser.detect.*;
+import util.RegexTerms;
 
 public class ScriptPreProcess {
 
-  private static final Pattern PAGE_NUMBER_ONLY = Pattern.compile("^\\d{1,4}$");
+  private static final Pattern PAGE_NUMBER_ONLY = Pattern.compile(
+    RegexTerms.PAGE_NUMBER_ONLY
+  );
   private static final Pattern PAGE_TITLE_NUMBER = Pattern.compile(
-    "^.+\\s+\\d{1,4}$"
+    RegexTerms.PAGE_TITLE_NUMBER
   );
   private static final Pattern INLINE_PAGE_HEADER = Pattern.compile(
-    "\\b\\d{1,4}\\s+(?:[A-Z][A-Z.'-]*\\s+){1,8}\\d{1,4}\\b"
+    RegexTerms.INLINE_PAGE_HEADER
   );
   private static final Pattern ZERO_WIDTH = Pattern.compile(
-    "[\\u200B\\u200C\\u200D\\uFEFF\\u00AD]"
+    RegexTerms.ZERO_WIDTH_CHARS
   );
   private static final Pattern PAGE_RANGE_HEADER = Pattern.compile(
-    "\\b\\d{1,4}\\s+[A-Z][A-Z .'-]{2,80}\\s+\\d{1,4}\\b"
+    RegexTerms.PAGE_RANGE_HEADER
   );
   private static final Pattern ALL_CAPS_RUN = Pattern.compile(
-    "\\b[A-Z][A-Z.'-]*(?:\\s+[A-Z][A-Z.'-]*){0,5}\\b"
+    RegexTerms.ALL_CAPS_RUN
   );
 
   public static String clean(String text) {
     if (text == null || text.isEmpty()) return "";
     String normalized = raw(text);
-    String[] lines = normalized.split("\n", -1);
+    String[] lines = normalized.split(RegexTerms.NEWLINE_CHAR, -1);
     List<String> cleanedLines = new ArrayList<>();
 
     StringBuilder out = new StringBuilder(normalized.length());
@@ -54,7 +57,7 @@ public class ScriptPreProcess {
 
         if (joinHyphen(line, next)) {
           String joined = line.substring(0, line.length() - 1) + next;
-          joined = joined.replaceAll("\\s+", " ").trim();
+          joined = joined.replaceAll(RegexTerms.WHITESPACE, " ").trim();
           cleanedLines.add(joined);
           i++;
           continue;
@@ -67,7 +70,7 @@ public class ScriptPreProcess {
     for (String cleanedLine : removeRepeated(cleanedLines)) {
       out.append(cleanedLine).append('\n');
     }
-    return out.toString().replaceFirst("\\s+$", "");
+    return out.toString().replaceFirst(RegexTerms.TRAILING_WHITESPACE, "");
   }
 
   private static String raw(String text) {
@@ -93,7 +96,7 @@ public class ScriptPreProcess {
       .replace('\u2013', '-')
       .replace('\u2014', '-')
       .replace('\u00A0', ' ')
-      .replaceAll("\\s+", " ");
+      .replaceAll(RegexTerms.WHITESPACE, " ");
   }
 
   private static String scrub(String line) {
@@ -104,7 +107,7 @@ public class ScriptPreProcess {
     cleaned = INLINE_PAGE_HEADER.matcher(cleaned).replaceAll(" ");
     cleaned = PAGE_RANGE_HEADER.matcher(cleaned).replaceAll(" ");
 
-    return cleaned.replaceAll("\\s+", " ").trim();
+    return cleaned.replaceAll(RegexTerms.WHITESPACE, " ").trim();
   }
 
   private static boolean structural(String line) {
@@ -116,17 +119,17 @@ public class ScriptPreProcess {
 
     String lower = t.toLowerCase();
     return (
-      lower.matches("^characters?:?.*$") ||
-      lower.matches("^sounds?:?.*$") ||
-      lower.matches("^scene:.*$") ||
-      lower.matches("^at rise\\b.*$") ||
-      lower.matches("^at the rise\\b.*$") ||
-      lower.matches("^before the curtain\\b.*$") ||
-      lower.matches("^episode\\s+[a-z0-9ivx -]+.*$") ||
-      lower.matches("^act\\s+[a-z0-9ivx -]+.*$") ||
-      lower.matches("^lights?\\b.*$") ||
-      lower.matches("^blackout\\b.*$") ||
-      lower.matches("^curtain\\b.*$")
+      lower.matches(RegexTerms.STRUCTURAL_CHARACTERS) ||
+      lower.matches(RegexTerms.STRUCTURAL_SOUNDS) ||
+      lower.matches(RegexTerms.STRUCTURAL_SCENE) ||
+      lower.matches(RegexTerms.STRUCTURAL_AT_RISE) ||
+      lower.matches(RegexTerms.STRUCTURAL_AT_THE_RISE) ||
+      lower.matches(RegexTerms.STRUCTURAL_BEFORE_CURTAIN) ||
+      lower.matches(RegexTerms.STRUCTURAL_EPISODE) ||
+      lower.matches(RegexTerms.STRUCTURAL_ACT) ||
+      lower.matches(RegexTerms.STRUCTURAL_LIGHTS) ||
+      lower.matches(RegexTerms.STRUCTURAL_BLACKOUT) ||
+      lower.matches(RegexTerms.STRUCTURAL_CURTAIN)
     );
   }
 
@@ -138,7 +141,7 @@ public class ScriptPreProcess {
     if (PAGE_NUMBER_ONLY.matcher(t).matches()) return true;
 
     if (t.equalsIgnoreCase("a") || t.equalsIgnoreCase("i")) return false;
-    if (t.matches("(?i)^(no|go|oh|yes|ok|hi)$")) return false;
+    if (t.matches(RegexTerms.SHORT_INTERJECTION)) return false;
     if (t.length() <= 2) return true;
     int alnum = 0;
     for (int i = 0; i < t.length(); i++) {
@@ -199,7 +202,7 @@ public class ScriptPreProcess {
     String t = norm(line);
     if (t.length() < 120) return false;
 
-    String[] words = t.split("\\s+");
+    String[] words = t.split(RegexTerms.WHITESPACE);
     if (words.length < 20) return false;
 
     int suspicious = 0;
@@ -208,7 +211,7 @@ public class ScriptPreProcess {
     int oddPunctuation = 0;
 
     for (String word : words) {
-      String cleaned = word.replaceAll("[^A-Za-z']", "");
+      String cleaned = word.replaceAll(RegexTerms.NON_LETTER_QUOTE, "");
       if (cleaned.isEmpty()) continue;
 
       if (cleaned.length() <= 2) {
@@ -236,7 +239,7 @@ public class ScriptPreProcess {
         normal++;
       }
 
-      if (word.matches(".*['\"‘’“”].*['\"‘’“”].*")) {
+      if (word.matches(RegexTerms.DOUBLE_QUOTE_MARKS)) {
         oddPunctuation++;
       }
     }
@@ -277,12 +280,12 @@ public class ScriptPreProcess {
   }
 
   private static int repeatedNonsenseScore(String line) {
-    String[] words = line.split("\\s+");
+    String[] words = line.split(RegexTerms.WHITESPACE);
     Map<String, Integer> counts = new HashMap<>();
     int score = 0;
 
     for (String word : words) {
-      String cleaned = word.replaceAll("[^A-Za-z]", "").toUpperCase();
+      String cleaned = word.replaceAll(RegexTerms.NON_LETTER, "").toUpperCase();
       if (cleaned.length() < 5) continue;
 
       int vowels = 0;
@@ -291,7 +294,7 @@ public class ScriptPreProcess {
       }
 
       boolean odd =
-        vowels == 0 || oddCaps(word) || cleaned.matches(".*[QXZ]{2,}.*");
+        vowels == 0 || oddCaps(word) || cleaned.matches(RegexTerms.CONSONANT_RUN);
       if (!odd) continue;
 
       int count = counts.getOrDefault(cleaned, 0) + 1;
@@ -303,12 +306,12 @@ public class ScriptPreProcess {
   }
 
   private static boolean lotsOfTinyGarbageWords(String line) {
-    String[] words = line.split("\\s+");
+    String[] words = line.split(RegexTerms.WHITESPACE);
     if (words.length < 40) return false;
 
     int suspicious = 0;
     for (String word : words) {
-      String cleaned = word.replaceAll("[^A-Za-z]", "");
+      String cleaned = word.replaceAll(RegexTerms.NON_LETTER, "");
       if (cleaned.length() == 0) continue;
       if (cleaned.length() <= 2) {
         suspicious++;
@@ -335,21 +338,21 @@ public class ScriptPreProcess {
       t.length() < 35 &&
       mostlyUpper(t)
     ) {
-      String[] words = t.split("\\s+");
+      String[] words = t.split(RegexTerms.WHITESPACE);
       if (words.length >= 3) {
         return true;
       }
     }
 
-    if (t.matches("^\\d{1,4}\\s+[A-Z][A-Z .'-]{3,}\\s+\\d{1,4}$")) {
+    if (t.matches(RegexTerms.NUMBER_CAPS_NUMBER)) {
       return true;
     }
 
-    if (t.matches("(?i)^characters?:?.*$")) return false;
-    if (t.matches("(?i)^sounds?:?.*$")) return false;
-    if (t.matches("(?i)^at rise\\b.*$")) return false;
-    if (t.matches("(?i)^episode\\s+\\w+.*$")) return false;
-    if (t.matches("(?i)^scene:.*$")) return false;
+    if (t.matches(RegexTerms.STRUCTURAL_CHARACTERS)) return false;
+    if (t.matches(RegexTerms.STRUCTURAL_SOUNDS)) return false;
+    if (t.matches(RegexTerms.STRUCTURAL_AT_RISE)) return false;
+    if (t.matches(RegexTerms.STRUCTURAL_EPISODE_CI)) return false;
+    if (t.matches(RegexTerms.STRUCTURAL_SCENE)) return false;
 
     return false;
   }
@@ -422,22 +425,22 @@ public class ScriptPreProcess {
 
     String cleaned = line.trim();
 
-    cleaned = cleaned.replaceAll("\\uFFFD", "");
-    cleaned = cleaned.replaceAll("[￾￿]", "");
+    cleaned = cleaned.replaceAll(RegexTerms.REPLACEMENT_CHAR, "");
+    cleaned = cleaned.replaceAll(RegexTerms.BROKEN_FFFE_CHARS, "");
 
     cleaned = cleaned.replaceAll(
-      "^([A-Z][A-Z0-9'’\\- ]{1,45}(?:\\s*/\\s*[A-Z][A-Z0-9'’\\- ]{1,45})?\\.)\\s*\\d{1,4}$",
+      RegexTerms.HEADING_WITH_TRAILING_PAGE_NUMBER,
       "$1"
     );
 
     cleaned = cleaned.replaceAll(
-      "^\\s*\\d{1,4}\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,3}\\s+(?=[A-Z][A-Z0-9'’\\- ]{1,45}(?:[.:]|$))",
+      RegexTerms.SCRIPT_LEADING_NAME_BLEED,
       ""
     );
 
     if (!structural(cleaned) && !SpeakerDetector.looksLike(cleaned)) {
       cleaned = cleaned.replaceAll(
-        "\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,3}\\s+\\d{1,4}\\s*$",
+        RegexTerms.SCRIPT_TRAILING_NAME_BLEED,
         ""
       );
     }
@@ -451,17 +454,17 @@ public class ScriptPreProcess {
     if (t.isEmpty()) return false;
     if (structural(t)) return false;
 
-    if (t.matches("^<\\s*PARSED TEXT FOR PAGE:.*>$")) return true;
-    if (t.matches("^<\\s*REGION\\s+\\d+\\s+OF\\s+\\d+.*>$")) return true;
-    if (t.matches("^<\\s*IMAGE FOR PAGE:.*>$")) return true;
+    if (t.matches(RegexTerms.PAGE_MARKER_PARSED_TEXT)) return true;
+    if (t.matches(RegexTerms.PAGE_MARKER_REGION)) return true;
+    if (t.matches(RegexTerms.PAGE_MARKER_IMAGE)) return true;
 
     if (PAGE_NUMBER_ONLY.matcher(t).matches()) return true;
 
-    if (t.matches("^[|\\[\\]{}()_\\-–—=+~`'\".,:;\\s]{2,}$")) return true;
+    if (t.matches(RegexTerms.PUNCTUATION_RUN_ONLY)) return true;
 
-    if (t.matches("(?i).*\\bISBN\\b.*")) return true;
-    if (t.matches("(?i).*\\bWWW\\..*")) return true;
-    if (t.matches("(?i).*\\.(COM|CO\\.UK|ORG|NET)\\b.*")) return true;
+    if (t.matches(RegexTerms.CONTAINS_ISBN_CI)) return true;
+    if (t.matches(RegexTerms.CONTAINS_WWW_CI)) return true;
+    if (t.matches(RegexTerms.CONTAINS_WEB_TLD_CI)) return true;
 
     return false;
   }
@@ -516,19 +519,15 @@ public class ScriptPreProcess {
     if (count < 3) return false;
     if (!repeatedHeaderFooter(line)) return false;
 
-    if (SpeakerDetector.looksLike(line) || roleHeading(line)) {
-      return false;
-    }
-
-    return true;
+    return !SpeakerDetector.looksLike(line) && !roleHeading(line);
   }
 
   private static boolean roleHeading(String line) {
-    String t = norm(line).replaceAll("[.:]+$", "").trim();
+    String t = norm(line).replaceAll(RegexTerms.TRAILING_DOT_COLON, "").trim();
     if (t.isEmpty() || t.length() > 70) return false;
 
     if (t.contains("/")) {
-      String[] parts = t.split("/");
+      String[] parts = t.split(RegexTerms.SLASH);
       if (parts.length < 2) return false;
       for (String part : parts) {
         if (!roleHeading(part)) return false;
@@ -536,7 +535,7 @@ public class ScriptPreProcess {
       return true;
     }
 
-    if (!t.matches("[A-Za-z][A-Za-z0-9 .'’\\-]*")) return false;
+    if (!t.matches(RegexTerms.ROLE_HEADING_SHAPE)) return false;
 
     int letters = 0;
     int uppercase = 0;
@@ -551,7 +550,7 @@ public class ScriptPreProcess {
     if (letters < 2) return false;
     if (uppercase * 10 < letters * 7) return false;
 
-    String[] words = t.split("\\s+");
+    String[] words = t.split(RegexTerms.WHITESPACE);
     if (words.length > 6) return false;
 
     boolean hasRoleWord = false;
@@ -562,9 +561,9 @@ public class ScriptPreProcess {
       }
     }
 
-    boolean hasNumber = t.matches(".*\\b\\d{1,3}\\b.*");
+    boolean hasNumber = t.matches(RegexTerms.CONTAINS_SMALL_NUMBER);
     boolean articlePrefixed = t.matches(
-      "(?i)^(A|AN|THE)\\s+[A-Z][A-Z0-9 .'’\\-]{1,50}$"
+      RegexTerms.SPEAKER_ARTICLE_HEADING_PATTERN
     );
 
     return hasRoleWord || hasNumber || articlePrefixed;
@@ -572,7 +571,7 @@ public class ScriptPreProcess {
 
   private static boolean roleWord(String word) {
     String w =
-      word == null ? "" : word.replaceAll("[^A-Za-z]", "").toUpperCase();
+      word == null ? "" : word.replaceAll(RegexTerms.NON_LETTER, "").toUpperCase();
     return (
       w.equals("CLERK") ||
       w.equals("REPORTER") ||
@@ -628,10 +627,10 @@ public class ScriptPreProcess {
     if (!hasLetter(line)) return false;
     if (!mostlyUpper(line)) return false;
 
-    String[] words = line.split("\\s+");
+    String[] words = line.split(RegexTerms.WHITESPACE);
     if (words.length > 6) return false;
 
-    if (line.matches(".*\\d.*")) return true;
+    if (line.matches(RegexTerms.CONTAINS_DIGIT)) return true;
     if (words.length >= 3) return true;
 
     return words.length <= 2 && line.length() <= 35;
@@ -657,8 +656,8 @@ public class ScriptPreProcess {
     if (mostlyUpper(b) && b.length() <= 35) return false;
     if (ALL_CAPS_RUN.matcher(b).matches() && b.length() <= 35) return false;
 
-    String lastWord = a.substring(0, a.length() - 1).replaceAll(".*\\s+", "");
-    String firstWord = b.replaceAll("\\s+.*", "");
+    String lastWord = a.substring(0, a.length() - 1).replaceAll(RegexTerms.AFTER_LAST_SPACE, "");
+    String firstWord = b.replaceAll(RegexTerms.BEFORE_FIRST_SPACE, "");
     if (lastWord.length() <= 1 || firstWord.length() <= 1) return false;
 
     return (
@@ -672,9 +671,5 @@ public class ScriptPreProcess {
     String t = s.trim();
     if (t.isEmpty()) return false;
     return Character.isLetter(t.charAt(0));
-  }
-
-  public static String text(String raw) {
-    return clean(raw);
   }
 }

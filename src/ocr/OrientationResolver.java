@@ -337,11 +337,7 @@ public class OrientationResolver {
       return false;
     }
 
-    if (aggressive.junkRatio > safe.junkRatio + 0.05) {
-      return false;
-    }
-
-    return true;
+    return aggressive.junkRatio <= safe.junkRatio + 0.05;
   }
 
   private static boolean close(OcrCandidate first, OcrCandidate second) {
@@ -438,19 +434,11 @@ public class OrientationResolver {
       return false;
     }
 
-    if (candidate.junkRatio >= 0.28) {
-      return true;
-    }
-
-    if (candidate.words <= 3 && candidate.tokens >= 4) {
-      return true;
-    }
-
-    if (candidate.englishRatio < 0.05 && candidate.lines >= 4) {
-      return true;
-    }
-
-    return false;
+    return (
+      candidate.junkRatio >= 0.28 ||
+      (candidate.words <= 3 && candidate.tokens >= 4) ||
+      (candidate.englishRatio < 0.05 && candidate.lines >= 4)
+    );
   }
 
   private static boolean safe(OcrCandidate candidate) {

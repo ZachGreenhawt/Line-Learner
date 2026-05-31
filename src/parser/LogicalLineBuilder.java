@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import parser.detect.*;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class LogicalLineBuilder {
@@ -88,7 +89,7 @@ public class LogicalLineBuilder {
   private static List<String> normalizedNonEmptyLines(String scriptText) {
     List<String> lines = new ArrayList<>();
 
-    for (String raw : scriptText.split("\\n")) {
+    for (String raw : scriptText.split(RegexTerms.NEWLINE)) {
       String line = normalizeLogicalInputLine(raw);
       if (!line.isEmpty()) {
         lines.add(line);
@@ -104,23 +105,27 @@ public class LogicalLineBuilder {
       return "";
     }
 
-    line = line.replaceAll("\\uFFFD", "");
-    line = line.replaceAll("[￾￿]", "");
+    line = line.replaceAll(RegexTerms.REPLACEMENT_CHAR, "");
+    line = line.replaceAll(RegexTerms.BROKEN_FFFE_CHARS, "");
 
-    if (
-      line.matches("^<\\s*PARSED TEXT FOR PAGE:.*>$") ||
-      line.matches("^<\\s*REGION\\s+\\d+\\s+OF\\s+\\d+.*>$") ||
-      line.matches("^<\\s*IMAGE FOR PAGE:.*>$")
-    ) {
+    if (pageMarkerTag(line)) {
       return "";
     }
 
     line = line.replaceAll(
-      "^([A-Z][A-Z0-9'’\\- ]{1,45}(?:\\s*/\\s*[A-Z][A-Z0-9'’\\- ]{1,45})?\\.)\\s*\\d{1,4}$",
+      RegexTerms.HEADING_WITH_TRAILING_PAGE_NUMBER,
       "$1"
     );
 
     return TextNormalizer.norm(line);
+  }
+
+  private static boolean pageMarkerTag(String line) {
+    return (
+      line.matches(RegexTerms.PAGE_MARKER_PARSED_TEXT) ||
+      line.matches(RegexTerms.PAGE_MARKER_REGION) ||
+      line.matches(RegexTerms.PAGE_MARKER_IMAGE)
+    );
   }
 
   private static boolean shouldDropLogicalLine(String line, Set<String> chars) {
@@ -141,7 +146,7 @@ public class LogicalLineBuilder {
       return false;
     }
 
-    if (t.matches("^\\d{1,4}$")) {
+    if (t.matches(RegexTerms.PAGE_NUMBER_ONLY)) {
       return true;
     }
 
@@ -149,16 +154,12 @@ public class LogicalLineBuilder {
       return true;
     }
 
-    if (
-      t.matches("^<\\s*PARSED TEXT FOR PAGE:.*>$") ||
-      t.matches("^<\\s*REGION\\s+\\d+\\s+OF\\s+\\d+.*>$") ||
-      t.matches("^<\\s*IMAGE FOR PAGE:.*>$")
-    ) {
+    if (pageMarkerTag(t)) {
       return true;
     }
 
     return (
-      t.matches("^[|\\[\\]{}()_\\-–—=+~`'\".,:;\\s]{2,}$") ||
+      t.matches(RegexTerms.PUNCTUATION_RUN_ONLY) ||
       looksLikeIsolatedPageFurniture(t, chars)
     );
   }
@@ -184,12 +185,12 @@ public class LogicalLineBuilder {
       return false;
     }
 
-    String[] words = t.split("\\s+");
+    String[] words = t.split(RegexTerms.WHITESPACE);
     if (words.length > 4 || t.length() > 40) {
       return false;
     }
 
-    return t.matches(".*\\d.*") || words.length <= 2;
+    return t.matches(RegexTerms.CONTAINS_DIGIT) || words.length <= 2;
   }
 
   private static boolean isMostlyUppercaseText(String line) {
@@ -294,7 +295,7 @@ public class LogicalLineBuilder {
     if (cleaned.isEmpty() || !TextNormalizer.hasLetter(cleaned)) {
       return false;
     }
-    if (cleaned.length() > 55 || cleaned.matches(".*[.!?;:][^.!?;:]*$")) {
+    if (cleaned.length() > 55 || cleaned.matches(RegexTerms.ENDS_WITH_SENTENCE_PUNCTUATION)) {
       return false;
     }
 
@@ -348,7 +349,7 @@ public class LogicalLineBuilder {
     if (!uppercaseLineFragment(first)) {
       return "";
     }
-    if (!second.matches("^\\d{1,3}[.:]?$")) {
+    if (!second.matches(RegexTerms.NUMBER_SUFFIX_FRAGMENT)) {
       return "";
     }
 
@@ -423,7 +424,7 @@ public class LogicalLineBuilder {
       return merged;
     }
 
-    if (merged.matches("^[A-Z0-9 ./'’\\-]+\\s*/\\s*[A-Z0-9 ./'’\\-]+\\.?$")) {
+    if (merged.matches(RegexTerms.SLASH_SPEAKER_LINE)) {
       return merged;
     }
 
@@ -467,7 +468,7 @@ public class LogicalLineBuilder {
   ) {
     for (String ch : CharacterExtractor.sortedNamesByLength(chars)) {
       String clean = TextNormalizer.cleanName(ch);
-      String[] parts = clean.split("\\s+");
+      String[] parts = clean.split(RegexTerms.WHITESPACE);
 
       if (parts.length < 2) {
         continue;
@@ -585,7 +586,7 @@ public class LogicalLineBuilder {
 
     for (String ch : CharacterExtractor.sortedNamesByLength(chars)) {
       String clean = TextNormalizer.cleanName(ch);
-      String[] parts = clean.split("\\s+");
+      String[] parts = clean.split(RegexTerms.WHITESPACE);
 
       if (parts.length < 2 || !parts[0].equals(first)) {
         continue;

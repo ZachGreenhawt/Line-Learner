@@ -1,6 +1,7 @@
 package ocr.model;
 
 import ocr.OcrCandidateScorer;
+import util.RegexTerms;
 
 public class OcrResult {
 
@@ -178,7 +179,7 @@ public class OcrResult {
       return -1;
     }
 
-    String[] lines = text.split("\\R");
+    String[] lines = text.split(RegexTerms.LINE_BREAK);
 
     int maxLinesToCheck = Math.min(lines.length, 10);
 
@@ -214,20 +215,20 @@ public class OcrResult {
       return -1;
     }
 
-    if (trimmed.matches("^\\d{1,4}$")) {
+    if (trimmed.matches(RegexTerms.PAGE_NUMBER_ONLY)) {
       return parsePage(trimmed);
     }
 
-    if (trimmed.matches("(?i)^page\\s+\\d{1,4}$")) {
-      return parsePage(trimmed.replaceFirst("(?i)^page\\s+", ""));
+    if (trimmed.matches(RegexTerms.PAGE_LABEL)) {
+      return parsePage(trimmed.replaceFirst(RegexTerms.PAGE_PREFIX_CI, ""));
     }
 
-    if (trimmed.matches("^\\d{1,4}\\s+[A-Z][A-Z .'/’\\-]{2,}$")) {
-      return parsePage(trimmed.replaceFirst("\\s+.*$", ""));
+    if (trimmed.matches(RegexTerms.OCR_NUMBER_THEN_CAPS)) {
+      return parsePage(trimmed.replaceFirst(RegexTerms.AFTER_FIRST_SPACE_TO_END, ""));
     }
 
-    if (trimmed.matches("^[A-Z][A-Z .'/’\\-]{2,}\\s+\\d{1,4}$")) {
-      return parsePage(trimmed.replaceFirst("^.*\\s+", ""));
+    if (trimmed.matches(RegexTerms.OCR_CAPS_THEN_NUMBER)) {
+      return parsePage(trimmed.replaceFirst(RegexTerms.BEFORE_LAST_SPACE_GREEDY, ""));
     }
 
     return -1;

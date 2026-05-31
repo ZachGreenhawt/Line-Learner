@@ -1,6 +1,7 @@
 package ocr;
 
 import java.util.Locale;
+import util.RegexTerms;
 
 public class TextExtractionQualityScorer {
 
@@ -14,7 +15,7 @@ public class TextExtractionQualityScorer {
     }
 
     String normalized = cleanText(text);
-    String[] lines = normalized.split("\\R");
+    String[] lines = normalized.split(RegexTerms.LINE_BREAK);
 
     int nonBlankLines = 0;
     int speakerLikeLines = 0;
@@ -164,7 +165,7 @@ public class TextExtractionQualityScorer {
     }
 
     String cleaned = cleanText(text);
-    String[] lines = cleaned.split("\\R");
+    String[] lines = cleaned.split(RegexTerms.LINE_BREAK);
 
     int nonBlank = 0;
     int suspicious = 0;
@@ -181,7 +182,10 @@ public class TextExtractionQualityScorer {
 
       nonBlank++;
 
-      if (line.matches("^.{1,8}$") && line.matches(".*[()|;:0-9].*")) {
+      if (
+        line.matches(RegexTerms.SHORT_LINE_1_8) &&
+        line.matches(RegexTerms.CONTAINS_PUNCT_DIGIT)
+      ) {
         veryShortNoise++;
         suspicious++;
         continue;
@@ -193,17 +197,17 @@ public class TextExtractionQualityScorer {
         continue;
       }
 
-      if (line.matches(".*\\b[A-Za-z]*[A-Z]{2,}[a-z]+[A-Z]+[A-Za-z]*\\b.*")) {
+      if (line.matches(RegexTerms.MIXED_CASE_GARBLE)) {
         mashedWords++;
         suspicious++;
         continue;
       }
 
-      String lettersOnly = line.replaceAll("[^A-Za-z]", "");
+      String lettersOnly = line.replaceAll(RegexTerms.NON_LETTER, "");
       if (
         lettersOnly.length() >= 10 &&
         lettersOnly.matches(
-          ".*[BCDFGHJKLMNPQRSTVWXYZbcdfghjklmnpqrstvwxyz]{5,}.*"
+          RegexTerms.CONSONANT_RUN_5_MIXED
         )
       ) {
         consonantChunks++;
@@ -255,7 +259,7 @@ public class TextExtractionQualityScorer {
       .replace('￿', ' ');
 
     StringBuilder out = new StringBuilder();
-    String[] lines = cleaned.split("\\R");
+    String[] lines = cleaned.split(RegexTerms.LINE_BREAK);
 
     for (String rawLine : lines) {
       String line = rawLine == null ? "" : rawLine.trim();
@@ -264,7 +268,7 @@ public class TextExtractionQualityScorer {
         continue;
       }
 
-      out.append(line.replaceAll("\\s{2,}", " ")).append('\n');
+      out.append(line.replaceAll(RegexTerms.DOUBLE_SPACE, " ")).append('\n');
     }
 
     return collapseExcessBlankLines(out.toString()).trim();
@@ -284,15 +288,15 @@ public class TextExtractionQualityScorer {
       return false;
     }
 
-    String lettersOnly = t.replaceAll("[^A-Za-z]", "");
+    String lettersOnly = t.replaceAll(RegexTerms.NON_LETTER, "");
     if (lettersOnly.length() < 2) {
       return false;
     }
 
     return (
-      t.matches("^[A-Z0-9 ./'’\\-]+$") &&
+      t.matches(RegexTerms.CAPS_ALNUM_APOS_LINE) &&
       t.equals(t.toUpperCase(Locale.ROOT)) &&
-      t.matches(".*[A-Z].*")
+      t.matches(RegexTerms.CONTAINS_UPPERCASE)
     );
   }
 
@@ -304,8 +308,8 @@ public class TextExtractionQualityScorer {
     String t = line.trim();
     return (
       t.length() > 20 &&
-      t.matches(".*[a-z].*") &&
-      t.matches(".*[aeiouAEIOU].*") &&
+      t.matches(RegexTerms.CONTAINS_LOWERCASE) &&
+      t.matches(RegexTerms.CONTAINS_VOWEL) &&
       !looksLikePageFurniture(t) &&
       !looksLikeGarbage(t)
     );
@@ -346,17 +350,17 @@ public class TextExtractionQualityScorer {
     String upper = line.trim().toUpperCase(Locale.ROOT);
 
     return (
-      upper.matches("^\\d{1,4}$") ||
-      upper.matches("^PAGE\\s+\\d{1,4}$") ||
+      upper.matches(RegexTerms.PAGE_NUMBER_ONLY) ||
+      upper.matches(RegexTerms.PAGE_LABEL) ||
       upper.matches(
-        "^[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}\\s+\\d{1,4}$"
+        RegexTerms.CAPS_WORDS_THEN_NUMBER
       ) ||
       upper.matches(
-        "^\\d{1,4}\\s+[A-Z][A-Z'’\\-]+(?:\\s+[A-Z][A-Z'’\\-]+){0,4}$"
+        RegexTerms.NUMBER_THEN_CAPS_WORDS
       ) ||
-      upper.matches(".*\\bISBN\\b.*") ||
-      upper.matches(".*\\bWWW\\..*") ||
-      upper.matches(".*\\.(COM|ORG|NET|CO\\.UK)\\b.*")
+      upper.matches(RegexTerms.CONTAINS_ISBN_CI) ||
+      upper.matches(RegexTerms.CONTAINS_WWW_CI) ||
+      upper.matches(RegexTerms.CONTAINS_WEB_TLD_CI)
     );
   }
 
@@ -370,7 +374,7 @@ public class TextExtractionQualityScorer {
       return false;
     }
 
-    String lettersOnly = t.replaceAll("[^A-Za-z]", "");
+    String lettersOnly = t.replaceAll(RegexTerms.NON_LETTER, "");
     if (lettersOnly.length() >= 8 && countVowels(lettersOnly) == 0) {
       return true;
     }
@@ -429,7 +433,7 @@ public class TextExtractionQualityScorer {
   }
 
   private static String collapseExcessBlankLines(String text) {
-    return text.replaceAll("\\n{3,}", "\\n\\n");
+    return text.replaceAll(RegexTerms.NEWLINE_RUN, "\\n\\n");
   }
 
   private static double clamp01(double value) {

@@ -1,7 +1,10 @@
 package parser.detect;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import parser.CharacterExtractor;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class SpeakerDetector {
@@ -21,7 +24,7 @@ public class SpeakerDetector {
       return speaker;
     }
 
-    String recovered = stripLeadingParentheticals(line);
+    String recovered = TextNormalizer.stripLeadingParentheticals(line);
     if (!recovered.equals(line)) {
       return namePlain(recovered, chars);
     }
@@ -72,7 +75,7 @@ public class SpeakerDetector {
     }
 
     if (rest.startsWith("(") || rest.startsWith("[")) {
-      String stripped = stripLeadingParentheticals(rest);
+      String stripped = TextNormalizer.stripLeadingParentheticals(rest);
       return (
         stripped.isEmpty() ||
         stripped.startsWith(":") ||
@@ -93,7 +96,12 @@ public class SpeakerDetector {
 
     for (String name : CharacterExtractor.sortedNamesByLength(chars)) {
       String clean = TextNormalizer.cleanName(name);
-      if (ignoreName(clean)) {
+      if (
+        clean.isEmpty() ||
+        clean.length() < 2 ||
+        CharacterExtractor.BAD_SHORT_LINES.contains(clean) ||
+        CharacterExtractor.BAD_HEADINGS.contains(clean)
+      ) {
         continue;
       }
 
@@ -141,7 +149,17 @@ public class SpeakerDetector {
     }
 
     String rest = line.substring(Math.min(line.length(), end)).strip();
-    rest = normalizeInsideRest(rest);
+    if (rest.startsWith("(") || rest.startsWith("[")) {
+      String stripped = TextNormalizer.stripLeadingParentheticals(rest);
+      if (
+        !stripped.isEmpty() &&
+        (stripped.startsWith(":") ||
+          stripped.startsWith(".") ||
+          bareTurn(stripped))
+      ) {
+        rest = stripped;
+      }
+    }
 
     if (start > 0) {
       return rest.startsWith(":") || rest.startsWith(".");
@@ -168,17 +186,17 @@ public class SpeakerDetector {
       return false;
     }
 
-    String name = raw.replaceAll("[.:]+$", "").trim();
+    String name = raw.replaceAll(RegexTerms.TRAILING_DOT_COLON, "").trim();
     if (name.isEmpty() || name.length() > 60) {
       return false;
     }
-    if (name.matches(".*[?!;].*")) {
+    if (name.matches(RegexTerms.CONTAINS_SENTENCE_PUNCT)) {
       return false;
     }
     if (name.contains("/") && !slashLooksLike(name)) {
       return false;
     }
-    if (!name.matches("[A-Za-z][A-Za-z0-9 .'’\\-/]*")) {
+    if (!name.matches(RegexTerms.SPEAKER_NAME_SHAPE)) {
       return false;
     }
 
@@ -198,7 +216,7 @@ public class SpeakerDetector {
       return false;
     }
 
-    String[] words = name.split("\\s+");
+    String[] words = name.split(RegexTerms.WHITESPACE);
     if (words.length > 7) {
       return false;
     }
@@ -206,7 +224,7 @@ public class SpeakerDetector {
     return (
       raw.endsWith(".") ||
       raw.endsWith(":") ||
-      name.matches(".*\\b\\d{1,3}\\b.*") ||
+      name.matches(RegexTerms.CONTAINS_SMALL_NUMBER) ||
       name.matches(RegexTerms.SPEAKER_ARTICLE_HEADING_PATTERN) ||
       name.matches(RegexTerms.SPEAKER_SLASH_HEADING_PATTERN) ||
       (words.length <= 4 && name.equals(name.toUpperCase()))
@@ -214,7 +232,7 @@ public class SpeakerDetector {
   }
 
   private static boolean slashLooksLike(String line) {
-    String[] parts = line.split("/");
+    String[] parts = line.split(RegexTerms.SLASH);
     if (parts.length < 2) {
       return false;
     }
@@ -295,11 +313,9 @@ public class SpeakerDetector {
     }
 
     if (normalized.endsWith(".") || normalized.endsWith(":")) {
-      String withoutPunctuation = normalized.substring(
-        0,
-        normalized.length() - 1
+      cleaned = TextNormalizer.cleanName(
+        normalized.substring(0, normalized.length() - 1)
       );
-      cleaned = TextNormalizer.cleanName(withoutPunctuation);
       if (chars.contains(cleaned)) {
         return cleaned;
       }
@@ -324,25 +340,21 @@ public class SpeakerDetector {
     );
     String heading = cut < 0 ? normalized : normalized.substring(0, cut);
 
-    String[] pieces = heading.split("/");
+    String[] pieces = heading.split(RegexTerms.SLASH);
     if (pieces.length < 2) {
       return "";
     }
 
-    StringBuilder combo = new StringBuilder();
+    List<String> cleanPieces = new ArrayList<>();
     for (String piece : pieces) {
       String cleaned = TextNormalizer.cleanName(piece);
       if (cleaned.isEmpty() || !chars.contains(cleaned)) {
         return "";
       }
-
-      if (combo.length() > 0) {
-        combo.append(" / ");
-      }
-      combo.append(cleaned);
+      cleanPieces.add(cleaned);
     }
 
-    return combo.toString();
+    return String.join(" / ", cleanPieces);
   }
 
   private static String parentheticalKnown(String line, Set<String> chars) {
@@ -371,15 +383,14 @@ public class SpeakerDetector {
     }
 
     String rest = normalized.substring(openParen).trim();
-    String stripped = stripLeadingParentheticals(rest);
+    String stripped = TextNormalizer.stripLeadingParentheticals(rest);
 
     if (
-      stripped.isEmpty() || stripped.startsWith(":") || stripped.startsWith(".")
+      stripped.isEmpty() ||
+      stripped.startsWith(":") ||
+      stripped.startsWith(".") ||
+      bareTurn(stripped)
     ) {
-      return speaker;
-    }
-
-    if (bareTurn(stripped)) {
       return speaker;
     }
 
@@ -435,7 +446,9 @@ public class SpeakerDetector {
         String rest = afterRaw(line, clean);
         if (
           !rest.isEmpty() && StageDetector.actionStart(rest) && !bareTurn(rest)
-        ) continue;
+        ) {
+          continue;
+        }
         return clean;
       }
     }
@@ -456,7 +469,7 @@ public class SpeakerDetector {
       }
     }
 
-    String recoveredLine = stripLeadingParentheticals(line);
+    String recoveredLine = TextNormalizer.stripLeadingParentheticals(line);
     if (
       !recoveredLine.equals(line) &&
       !namePlain(recoveredLine, Set.of(speaker)).isEmpty()
@@ -489,7 +502,7 @@ public class SpeakerDetector {
   private static String afterSlash(String line, String speaker) {
     String rest = TextNormalizer.norm(line);
 
-    for (String part : speaker.split("/")) {
+    for (String part : speaker.split(RegexTerms.SLASH)) {
       String name = TextNormalizer.cleanName(part);
       if (
         name.isEmpty() || !rest.toUpperCase().startsWith(name.toUpperCase())
@@ -507,7 +520,7 @@ public class SpeakerDetector {
       return TextNormalizer.norm(rest.substring(1));
     }
 
-    rest = stripLeadingParentheticals(rest);
+    rest = TextNormalizer.stripLeadingParentheticals(rest);
     if (rest.startsWith(":") || rest.startsWith(".")) {
       return TextNormalizer.norm(rest.substring(1));
     }
@@ -521,8 +534,8 @@ public class SpeakerDetector {
       return "";
     }
 
-    String possibleSpeaker = TextNormalizer.cleanName(line.substring(0, colon));
-    if (!possibleSpeaker.equals(TextNormalizer.cleanName(speaker))) {
+    String name = TextNormalizer.cleanName(line.substring(0, colon));
+    if (!name.equals(TextNormalizer.cleanName(speaker))) {
       return "";
     }
 
@@ -535,8 +548,8 @@ public class SpeakerDetector {
       return "";
     }
 
-    String possibleSpeaker = TextNormalizer.cleanName(line.substring(0, dot));
-    if (!possibleSpeaker.equals(TextNormalizer.cleanName(speaker))) {
+    String name = TextNormalizer.cleanName(line.substring(0, dot));
+    if (!name.equals(TextNormalizer.cleanName(speaker))) {
       return "";
     }
 
@@ -545,7 +558,7 @@ public class SpeakerDetector {
 
   private static String afterRaw(String line, String rawSpeaker) {
     String rest = TextNormalizer.norm(line.substring(rawSpeaker.length()));
-    rest = stripLeadingParentheticals(rest);
+    rest = TextNormalizer.stripLeadingParentheticals(rest);
 
     if (rest.startsWith(":") || rest.startsWith(".")) {
       rest = TextNormalizer.norm(rest.substring(1));
@@ -556,7 +569,7 @@ public class SpeakerDetector {
 
   private static String afterParenthetical(String line, String rawSpeaker) {
     String rest = TextNormalizer.norm(line.substring(rawSpeaker.length()));
-    rest = stripLeadingParentheticals(rest);
+    rest = TextNormalizer.stripLeadingParentheticals(rest);
 
     if (rest.isEmpty()) {
       return "";
@@ -566,40 +579,34 @@ public class SpeakerDetector {
       return TextNormalizer.norm(rest.substring(1));
     }
 
-    if (bareTurn(rest)) {
-      return rest;
-    }
-
-    return "";
+    return bareTurn(rest) ? rest : "";
   }
 
-  private static boolean startsParenthetical(String line, String cleanSpeaker) {
-    if (line == null || cleanSpeaker == null || cleanSpeaker.isEmpty()) {
+  private static boolean startsParenthetical(String line, String speaker) {
+    if (line == null || speaker == null || speaker.isEmpty()) {
       return false;
     }
 
     line = TextNormalizer.norm(line);
-    cleanSpeaker = TextNormalizer.cleanName(cleanSpeaker);
+    speaker = TextNormalizer.cleanName(speaker);
 
-    if (!line.regionMatches(true, 0, cleanSpeaker, 0, cleanSpeaker.length())) {
+    if (!line.regionMatches(true, 0, speaker, 0, speaker.length())) {
       return false;
     }
-    if (!allCapsAt(line, 0, cleanSpeaker)) {
+    if (!allCapsAt(line, 0, speaker)) {
       return false;
     }
-    if (line.length() <= cleanSpeaker.length()) {
+    if (line.length() <= speaker.length()) {
       return false;
     }
 
-    char next = line.charAt(cleanSpeaker.length());
+    char next = line.charAt(speaker.length());
     if (Character.isWhitespace(next)) {
-      String rest = line.substring(cleanSpeaker.length()).trim();
+      String rest = line.substring(speaker.length()).trim();
       return rest.startsWith("(") || rest.startsWith("[");
     }
 
-    return (
-      (next == '(' || next == '[') && afterBoundary(line, cleanSpeaker.length())
-    );
+    return next == '(' || next == '[';
   }
 
   public static boolean bareTurn(String rest) {
@@ -621,7 +628,7 @@ public class SpeakerDetector {
     }
 
     return (
-      rest.matches(".*[a-z].*") ||
+      rest.matches(RegexTerms.CONTAINS_LOWERCASE) ||
       rest.contains("?") ||
       rest.contains("!") ||
       rest.contains("—") ||
@@ -679,8 +686,8 @@ public class SpeakerDetector {
     String before = line
       .substring(0, start)
       .toLowerCase()
-      .replaceAll("[^a-z -]", " ")
-      .replaceAll("\\s+", " ")
+      .replaceAll(RegexTerms.NON_LOWER_SPACE_DASH, " ")
+      .replaceAll(RegexTerms.WHITESPACE, " ")
       .trim();
 
     if (before.isEmpty()) {
@@ -706,8 +713,8 @@ public class SpeakerDetector {
 
     String lower = before
       .toLowerCase()
-      .replaceAll("[^a-z '-]", " ")
-      .replaceAll("\\s+", " ")
+      .replaceAll(RegexTerms.NON_LOWER_SPACE_QUOTE_DASH, " ")
+      .replaceAll(RegexTerms.WHITESPACE, " ")
       .trim();
     if (lower.isEmpty()) {
       return false;
@@ -721,31 +728,6 @@ public class SpeakerDetector {
       afterBoundary(line, end) ||
       (line.length() > end &&
         (line.charAt(end) == '(' || line.charAt(end) == '['))
-    );
-  }
-
-  private static String normalizeInsideRest(String rest) {
-    if (rest.startsWith("(") || rest.startsWith("[")) {
-      String stripped = stripLeadingParentheticals(rest);
-      if (
-        !stripped.isEmpty() &&
-        (stripped.startsWith(":") || stripped.startsWith("."))
-      ) {
-        return stripped;
-      }
-      if (!stripped.isEmpty() && bareTurn(stripped)) {
-        return stripped;
-      }
-    }
-    return rest;
-  }
-
-  private static boolean ignoreName(String clean) {
-    return (
-      clean.isEmpty() ||
-      clean.length() < 2 ||
-      CharacterExtractor.BAD_SHORT_LINES.contains(clean) ||
-      CharacterExtractor.BAD_HEADINGS.contains(clean)
     );
   }
 
@@ -776,36 +758,5 @@ public class SpeakerDetector {
     }
 
     return letters > 0 && caps * 10 >= letters * 8;
-  }
-
-  public static String stripLeadingParentheticals(String text) {
-    String out = TextNormalizer.norm(text);
-    boolean changed = true;
-
-    while (changed && !out.isEmpty()) {
-      changed = false;
-
-      if (out.startsWith("(")) {
-        int close = out.indexOf(")");
-        if (close >= 0) {
-          out = TextNormalizer.norm(out.substring(close + 1));
-          changed = true;
-        }
-      } else if (out.startsWith("[")) {
-        int close = out.indexOf("]");
-        if (close >= 0) {
-          out = TextNormalizer.norm(out.substring(close + 1));
-          changed = true;
-        }
-      } else if (out.startsWith("{")) {
-        int close = out.indexOf("}");
-        if (close >= 0) {
-          out = TextNormalizer.norm(out.substring(close + 1));
-          changed = true;
-        }
-      }
-    }
-
-    return out;
   }
 }

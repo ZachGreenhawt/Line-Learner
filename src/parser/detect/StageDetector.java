@@ -2,6 +2,7 @@ package parser.detect;
 
 import java.util.List;
 import java.util.Set;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class StageDetector {
@@ -296,8 +297,8 @@ public class StageDetector {
       line.isEmpty() ||
       up.equals("ACT") ||
       up.equals("SCENE") ||
-      up.matches("^ACT\\s+.*") ||
-      up.matches("^SCENE\\s+.*")
+      up.matches(RegexTerms.ACT_PREFIX) ||
+      up.matches(RegexTerms.SCENE_PREFIX)
     );
   }
 
@@ -319,13 +320,13 @@ public class StageDetector {
       return false;
     }
 
-    if (up.matches("^\\d{1,4}$")) {
+    if (up.matches(RegexTerms.PAGE_NUMBER_ONLY)) {
       return true;
     }
-    if (up.matches("^\\d{1,4}\\s+[A-Z][A-Z .'-]{2,}$")) {
+    if (up.matches(RegexTerms.NUMBER_THEN_CAPS)) {
       return true;
     }
-    if (up.matches("^[A-Z][A-Z .'-]{2,}\\s+\\d{1,4}$")) {
+    if (up.matches(RegexTerms.CAPS_THEN_NUMBER)) {
       return true;
     }
 
@@ -333,24 +334,24 @@ public class StageDetector {
   }
 
   private static boolean looksLikeNumberedSpeaker(String up) {
-    return up.matches("^[A-Z][A-Z .'/&-]{1,30}\\s+\\d{1,2}\\.?$");
+    return up.matches(RegexTerms.NUMBERED_SPEAKER);
   }
 
   private static boolean looksLikeParentheticalSpeaker(String up) {
-    return up.matches("^[A-Z][A-Z0-9 /'.&-]{1,45}\\s*\\(.*\\)\\.?$");
+    return up.matches(RegexTerms.PARENTHETICAL_SPEAKER);
   }
 
   private static boolean hasPageNumberAndHeaderWords(String up) {
     int nums = 0;
     int caps = 0;
 
-    String[] parts = up.split("\\s+");
+    String[] parts = up.split(RegexTerms.WHITESPACE);
     for (String part : parts) {
-      String cleaned = part.replaceAll("[^A-Z0-9]", "");
-      if (cleaned.matches("\\d{1,4}")) {
+      String cleaned = part.replaceAll(RegexTerms.NON_ALNUM_UPPER, "");
+      if (cleaned.matches(RegexTerms.DIGITS_1_4)) {
         nums++;
       }
-      if (cleaned.matches("[A-Z]{3,}")) {
+      if (cleaned.matches(RegexTerms.CAPS_RUN_3)) {
         caps++;
       }
     }
@@ -383,7 +384,7 @@ public class StageDetector {
       lower.startsWith("enter ") ||
       lower.startsWith("re-enter ") ||
       lower.startsWith("reenter ") ||
-      lower.matches("^(blackout|lights?|sound|music|curtain)\\b.*")
+      lower.matches(RegexTerms.TECH_CUE_START)
     );
   }
 
@@ -404,10 +405,10 @@ public class StageDetector {
 
     return (
       lower.matches(
-        "^(enter|enters|exit|exits|exeunt|re-enter|re-enters|reenter|reenters)\\b.*"
+        RegexTerms.ENTRANCE_EXIT_START
       ) ||
       lower.matches(
-        "^.*\\b(enter|enters|exit|exits|exeunt|re-enter|re-enters|reenter|reenters)\\b.*"
+        RegexTerms.ENTRANCE_EXIT_ANYWHERE
       )
     );
   }
@@ -462,9 +463,9 @@ public class StageDetector {
   public static boolean whole(String line) {
     line = TextNormalizer.norm(line);
     return (
-      line.matches("^\\([^)]*\\)\\.?$") ||
-      line.matches("^\\[[^\\]]*\\]\\.?$") ||
-      line.matches("^\\{[^}]*\\}\\.?$")
+      line.matches(RegexTerms.PAREN_WHOLE) ||
+      line.matches(RegexTerms.BRACKET_WHOLE) ||
+      line.matches(RegexTerms.BRACE_WHOLE)
     );
   }
 
@@ -486,13 +487,13 @@ public class StageDetector {
 
     return (
       lower.matches(
-        "^(inside|outside|onstage|offstage|upstage|downstage)\\b.*"
+        RegexTerms.LOCATION_DIRECTION
       ) ||
-      lower.matches("^(a|an|the)\\s+[a-z][a-z '-]{1,45}:.*") ||
+      lower.matches(RegexTerms.ARTICLE_LOCATION_COLON) ||
       articleStageSettingLine(lower) ||
-      lower.matches("^(lights?|sound|music)\\b.*") ||
+      lower.matches(RegexTerms.TECH_LIGHTS_SOUND) ||
       lower.matches(
-        "^(morning|afternoon|evening|night|later|silence|pause|beat)\\.?$"
+        RegexTerms.TIME_OF_DAY
       )
     );
   }
@@ -507,7 +508,7 @@ public class StageDetector {
     }
 
     return lower.matches(
-      "^(a|an|the)\\s+(room|office|kitchen|bedroom|living room|sitting room|dining room|street|hall|hotel|hotel room|womb|church|house|apartment|courtroom|cell|jail cell|prison cell|yard|garden|stage|window|door|stairway|stairs|landing|porch|garage|bar|restaurant|hospital|cemetery|bathroom)\\b.*"
+      RegexTerms.ARTICLE_SETTING_NOUN
     );
   }
 
@@ -515,22 +516,22 @@ public class StageDetector {
     if (lower == null || lower.isBlank()) {
       return false;
     }
-    if (lower.matches(".*[?!].*")) {
+    if (lower.matches(RegexTerms.CONTAINS_BANG_QUESTION)) {
       return true;
     }
     if (
       lower.matches(
-        "^(the minute|the early|the rest|the way|the thing|the one|the other|the same|the last|the first|the next)\\b.*"
+        RegexTerms.DIALOGUE_THE_PHRASE
       ) ||
       lower.matches(
-        "^(a little|a lot|a double|a single|a good|a bad|a big|a small)\\b.*"
+        RegexTerms.DIALOGUE_A_PHRASE
       )
     ) {
       return true;
     }
 
     return lower.matches(
-      ".*\\b(i|i'm|i'll|i've|you|you're|you'll|we|we're|don't|can't|won't|would|could|should|want|know|think|feel|love|hate|need|mean|remember)\\b.*"
+      RegexTerms.DIALOGUE_FRAGMENT_PRONOUN
     );
   }
 
@@ -622,7 +623,7 @@ public class StageDetector {
 
     return (
       containsActionWord(lower) ||
-      lower.matches(".*\\b(rings|tolls|sounds|opens|closes|shakes)\\b.*")
+      lower.matches(RegexTerms.OBJECT_SOUND_VERB)
     );
   }
 
@@ -642,16 +643,17 @@ public class StageDetector {
 
     String lower = text.toLowerCase();
     if (
-      lower.matches("^(he|she|they|we|i|you)\\b.*") && text.matches(".*[.!?]$")
+      lower.matches(RegexTerms.PRONOUN_START) &&
+      text.matches(RegexTerms.ENDS_WITH_SENTENCE)
     ) {
       return true;
     }
 
     return (
-      text.matches("^[A-Z][a-z].*") &&
-      text.matches(".*[.!?]$") &&
+      text.matches(RegexTerms.TITLE_THEN_LOWER) &&
+      text.matches(RegexTerms.ENDS_WITH_SENTENCE) &&
       lower.matches(
-        ".*\\b(i|you|we|they|he|she|me|my|your|our|their|his|her|them|us)\\b.*"
+        RegexTerms.DIALOGUE_PRONOUN_BROAD
       )
     );
   }
@@ -721,7 +723,7 @@ public class StageDetector {
   }
 
   private static boolean containsActionWord(String lower) {
-    String padded = " " + lower.replaceAll("[^a-z'-]+", " ") + " ";
+    String padded = " " + lower.replaceAll(RegexTerms.NON_LOWER_QUOTE_DASH_RUN, " ") + " ";
     for (String word : ACTION_WORDS) {
       if (padded.contains(" " + word + " ")) {
         return true;
@@ -774,8 +776,8 @@ public class StageDetector {
       " " +
       line
         .toUpperCase()
-        .replaceAll("[^A-Z0-9' -]", " ")
-        .replaceAll("\\s+", " ") +
+        .replaceAll(RegexTerms.NON_ALNUM_QUOTE_SPACE_DASH, " ")
+        .replaceAll(RegexTerms.WHITESPACE, " ") +
       " ";
 
     int hits = 0;
@@ -837,7 +839,7 @@ public class StageDetector {
       lower.contains("narrator") ||
       lower.contains("doesn't speak") ||
       lower.contains("does not speak") ||
-      lower.matches(".*\\b(age|aged|years old|year old)\\b.*")
+      lower.matches(RegexTerms.AGE_TERM)
     );
   }
 
@@ -873,7 +875,7 @@ public class StageDetector {
     }
 
     return lower.matches(
-      ".*\\b(enters|exits|appears|goes|comes|walks|runs|sits|stands|looks|watches|nods|shrugs|shakes|puts|lays|takes|tolls|speaks|whispers|remains|crosses|opens|closes|holds|drops|kneels|stares|stops|listens|sings|dances|kisses|touches|twirls|consoles|cleans|straightens|waves|winces|demonstrates)\\b.*"
+      RegexTerms.GENERAL_STAGE_VERB
     );
   }
 
@@ -926,12 +928,12 @@ public class StageDetector {
     }
 
     return (
-      lower.matches("^(pause|beat|silence)\\.?$") ||
+      lower.matches(RegexTerms.TERSE_BEAT) ||
       lower.matches(
-        "^(he|she|they|it)\\s+(nods|shrugs|smiles|laughs|cries|sighs|waits|listens|watches|stares|turns|exits|enters|leaves)\\.?$"
+        RegexTerms.PRONOUN_ACTION_BEAT
       ) ||
       lower.matches(
-        "^[a-z][a-z' -]{1,35}\\s+(nods|shrugs|smiles|laughs|cries|sighs|waits|listens|watches|stares|turns|exits|enters|leaves)\\.?$"
+        RegexTerms.LOWER_ACTION_BEAT
       )
     );
   }
@@ -949,12 +951,12 @@ public class StageDetector {
     }
 
     return (
-      lower.matches("^(there is|there are|there's)\\s+.*") ||
+      lower.matches(RegexTerms.THERE_IS) ||
       lower.matches(
-        "^(a|an|the)\\s+[a-z][a-z' -]{1,45}\\s+(is|are|stands|sits|hangs|lies|waits|appears|remains)\\b.*"
+        RegexTerms.ARTICLE_SCENE_IMAGE
       ) ||
       lower.matches(
-        ".*\\b(is seen|are seen|can be seen|is heard|are heard|can be heard)\\b.*"
+        RegexTerms.IS_SEEN_HEARD
       )
     );
   }
@@ -963,10 +965,10 @@ public class StageDetector {
     String lower = TextNormalizer.norm(line).toLowerCase();
     return (
       lower.matches(
-        "^(end of|intermission|blackout|curtain|lights?|sound|music)\\b.*"
+        RegexTerms.HEADER_PLAYABLE
       ) ||
-      lower.matches("^(act|scene|episode)\\s+.*") ||
-      lower.matches("^[ivxlcdm]+\\.?\\s+[a-z0-9' -]{2,80}$")
+      lower.matches(RegexTerms.ACT_SCENE_EPISODE_PREFIX) ||
+      lower.matches(RegexTerms.ROMAN_NUMERAL_LINE)
     );
   }
 
@@ -996,12 +998,12 @@ public class StageDetector {
     String lower = text.toLowerCase();
     if (
       lower.matches(
-        "^(i|i'm|i'll|i'd|ive|i've|you|you're|you'll|we|we're|we'll|they|they're|he|she)\\b.*"
+        RegexTerms.DIALOGUE_SENTENCE_START
       ) &&
       (text.contains("?") ||
         text.contains("!") ||
         text.matches(
-          ".*\\b(am|are|is|was|were|have|has|had|do|does|did|will|would|could|should|want|know|think|feel|love|hate|need|mean|remember)\\b.*"
+          RegexTerms.DIALOGUE_SENTENCE_VERB
         ))
     ) {
       return true;
@@ -1009,7 +1011,7 @@ public class StageDetector {
 
     return (
       text.length() > 80 &&
-      text.matches(".*[a-z].*") &&
+      text.matches(RegexTerms.CONTAINS_LOWERCASE) &&
       !containsGeneralStageVerbRaw(text.toLowerCase()) &&
       !mentionsManyChars(text, chars, 2)
     );

@@ -2,7 +2,7 @@ package parser;
 
 import java.util.ArrayList;
 import java.util.List;
-import parser.detect.RegexTerms;
+import util.RegexTerms;
 import parser.model.ParseModels;
 import practice.Settings;
 import util.TextNormalizer;
@@ -98,7 +98,7 @@ public class CuePairBuilder {
       return true;
     }
 
-    for (String part : speaker.split("\\s*/\\s*")) {
+    for (String part : speaker.split(RegexTerms.WHITESPACE_AROUND_SLASH)) {
       if (TextNormalizer.cleanName(part).equals(target)) {
         return true;
       }
@@ -117,7 +117,7 @@ public class CuePairBuilder {
     if (low(turn)) {
       return reviewCue(turn, reason(turn));
     }
-    return line(turn, speaker);
+    return turn.speaker + ": " + turn.text;
   }
 
   private static boolean useCue(
@@ -251,7 +251,7 @@ public class CuePairBuilder {
     if (RegexTerms.containsPublicationOrFurniture(lower)) {
       return true;
     }
-    if (cleaned.matches("^\\d{1,4}$")) {
+    if (cleaned.matches(RegexTerms.PAGE_NUMBER_ONLY)) {
       return true;
     }
 
@@ -276,17 +276,17 @@ public class CuePairBuilder {
     if (!upper.equals(cleaned)) {
       return false;
     }
-    if (upper.matches(".*\\d{1,4}.*")) {
+    if (upper.matches(RegexTerms.CONTAINS_PAGE_NUMBER)) {
       return true;
     }
 
-    String[] words = upper.split("\\s+");
+    String[] words = upper.split(RegexTerms.WHITESPACE);
     if (words.length < 1 || words.length > 3) {
       return false;
     }
 
     for (String word : words) {
-      if (!word.matches("[A-Z][A-Z'’\\-]{1,}")) {
+      if (!word.matches(RegexTerms.ALL_CAPS_WORD)) {
         return false;
       }
     }
@@ -296,15 +296,6 @@ public class CuePairBuilder {
 
   private static boolean roleWord(String text) {
     String upper = TextNormalizer.cleanName(text).toUpperCase();
-    return upper.matches(
-      ".*\\b(GIRL|BOY|MAN|WOMAN|MOTHER|FATHER|SON|DAUGHTER|CHILD|VOICE|VOICES|CLERK|JUDGE|PRIEST|LAWYER|REPORTER|GUARD|MATRON|HUSBAND|WIFE|COLONEL|CAPTAIN|SERGEANT|DOCTOR|NURSE|OFFICER|INSPECTOR|DETECTIVE|PROFESSOR|TEACHER|STUDENT|WAITER|WAITRESS|BELLBOY|JANITOR|MAID|SERVANT|KING|QUEEN|PRINCE|PRINCESS|DUKE|DUCHESS|LORD|LADY|FIRST|SECOND|THIRD|FOURTH|YOUNG|OLD|OLDER|ELDERLY|CHORUS|ENSEMBLE|CROWD|GROUP|OFFSTAGE|ANNOUNCER|NARRATOR|ADDING|FILING|TELEPHONE|DEFENSE|DEFENCE|PROSECUTION|BARBER|LOVER|HUCKSTER|SPECTATOR|SPECTATORS|JUROR|JURY|WITNESS|POLICEMAN|POLICE|ATTENDANT|STRANGER|CUSTOMER|WORKER|SECRETARY|STENOGRAPHER|PERSON|SOMEONE|SOMEBODY|ACTOR|ACTRESS|PLAYER|PERFORMER|OPERATOR|TYPIST|BYSTANDER)\\b.*"
-    );
-  }
-
-  private static String line(ParseModels.ScriptTurn turn, String speaker) {
-    if (UNKNOWN.equals(speaker)) {
-      return UNKNOWN + ": " + turn.text;
-    }
-    return turn.speaker + ": " + turn.text;
+    return upper.matches(RegexTerms.containsAnyWord(RegexTerms.ROLE_WORD));
   }
 }

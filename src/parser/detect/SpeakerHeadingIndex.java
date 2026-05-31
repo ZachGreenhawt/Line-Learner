@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class SpeakerHeadingIndex {
@@ -193,7 +194,7 @@ public class SpeakerHeadingIndex {
       return null;
     }
 
-    String[] pieces = heading.split("/");
+    String[] pieces = heading.split(RegexTerms.SLASH);
     List<String> cleanPieces = new ArrayList<>();
 
     for (String piece : pieces) {
@@ -321,7 +322,7 @@ public class SpeakerHeadingIndex {
       return null;
     }
 
-    String after = stripLeadingParentheticals(afterAlias);
+    String after = TextNormalizer.stripLeadingParentheticals(afterAlias);
     boolean inlineDialogue =
       !after.isEmpty() && !after.equals(".") && !after.equals(":");
     after = cleanRemainingAfterHeading(after);
@@ -474,42 +475,11 @@ public class SpeakerHeadingIndex {
   private static String cleanRemainingAfterHeading(String remaining) {
     String out = TextNormalizer.norm(remaining);
 
-    out = stripLeadingParentheticals(out);
+    out = TextNormalizer.stripLeadingParentheticals(out);
 
     while (out.startsWith(".") || out.startsWith(":")) {
       out = TextNormalizer.norm(out.substring(1));
-      out = stripLeadingParentheticals(out);
-    }
-
-    return out;
-  }
-
-  private static String stripLeadingParentheticals(String text) {
-    String out = TextNormalizer.norm(text);
-    boolean changed = true;
-
-    while (changed && !out.isEmpty()) {
-      changed = false;
-
-      if (out.startsWith("(")) {
-        int close = out.indexOf(")");
-        if (close >= 0) {
-          out = TextNormalizer.norm(out.substring(close + 1));
-          changed = true;
-        }
-      } else if (out.startsWith("[")) {
-        int close = out.indexOf("]");
-        if (close >= 0) {
-          out = TextNormalizer.norm(out.substring(close + 1));
-          changed = true;
-        }
-      } else if (out.startsWith("{")) {
-        int close = out.indexOf("}");
-        if (close >= 0) {
-          out = TextNormalizer.norm(out.substring(close + 1));
-          changed = true;
-        }
-      }
+      out = TextNormalizer.stripLeadingParentheticals(out);
     }
 
     return out;
@@ -618,7 +588,7 @@ public class SpeakerHeadingIndex {
       cleaned.contains("\"") ||
       cleaned.contains("'") ||
       lower.matches(
-        ".*\\b(i|i'm|i'll|i've|you|you're|we|we're|they|he|she|it|don't|can't|won't|would|could|should|want|know|think|feel|love|hate|need|mean|remember|please|yes|no)\\b.*"
+        RegexTerms.containsAnyWord(RegexTerms.HEADING_DIALOGUE_REMAINDER)
       ) ||
       cleaned.length() <= 80
     );
@@ -762,17 +732,13 @@ public class SpeakerHeadingIndex {
 
     if (
       lower.matches(
-        ".*\\b(actor|actress|played by|understudy|director|directed by|voice of|original cast|premiere|production|company|artistic director|executive director)\\b.*"
+        RegexTerms.containsAnyWord(RegexTerms.HEADING_CAST_CREDIT_REMAINDER)
       )
     ) {
       return true;
     }
 
-    if (looksLikePersonNameRemainder(cleaned)) {
-      return true;
-    }
-
-    return false;
+    return looksLikePersonNameRemainder(cleaned);
   }
 
   private static boolean looksLikeCharacterDescriptionRemainder(String after) {
@@ -782,7 +748,7 @@ public class SpeakerHeadingIndex {
     }
 
     return lower.matches(
-      ".*\\b(husband|wife|daughter|son|father|mother|brother|sister|child|children|narrator|voice|pregnant|doesn't speak|does not speak|years old|year old|inside|grown up|played by|appears as|also plays|described as|counterpart|adolescence|elderly|young|old)\\b.*"
+      RegexTerms.containsAnyWord(RegexTerms.HEADING_DESCRIPTION_REMAINDER)
     );
   }
 
@@ -793,7 +759,7 @@ public class SpeakerHeadingIndex {
     }
 
     return lower.matches(
-      "^(is|are|was|were|talks|speaks|enters|exits|attaches|straightens|shines|makes|stopped|grew|goes|comes|looks|watches|follows|sits|stands|nods|waves|shrugs|smiles|kisses|touches|helps|reads|puts|gets|takes|thumbs|runs|twirls|consoles|sips|eats|whispers|demonstrates|opens|closes|crosses|pulls|pushes|lays|carries|holds|reports|remembers|forgets|cries|laughs|points|turns|moves|walks|kneels|rises|falls|leans|stares|waits|listens|searches|throws|picks|drops|hands|gives|receives|places|sets|covers|uncovers|wipes|combs|brushes|dances|sings|hums)\\b.*"
+      RegexTerms.startsWithAnyWord(RegexTerms.HEADING_ACTION_NARRATION)
     );
   }
 
@@ -818,14 +784,14 @@ public class SpeakerHeadingIndex {
       return false;
     }
 
-    String[] words = cleaned.split("\\s+");
+    String[] words = cleaned.split(RegexTerms.WHITESPACE);
     if (words.length < 2 || words.length > 4) {
       return false;
     }
 
     int personLike = 0;
     for (String word : words) {
-      if (word.matches("[A-Z][a-zA-Z'’.-]+")) {
+      if (word.matches(RegexTerms.TITLE_CASE_WORD)) {
         personLike++;
       }
     }
@@ -849,17 +815,17 @@ public class SpeakerHeadingIndex {
       return false;
     }
 
-    if (upper.matches(".*\\d{1,4}.*")) {
+    if (upper.matches(RegexTerms.CONTAINS_PAGE_NUMBER)) {
       return true;
     }
 
-    String[] words = upper.split("\\s+");
+    String[] words = upper.split(RegexTerms.WHITESPACE);
     if (words.length < 1 || words.length > 3) {
       return false;
     }
 
     for (String word : words) {
-      if (!word.matches("[A-Z][A-Z'’\\-]{1,}")) {
+      if (!word.matches(RegexTerms.ALL_CAPS_WORD)) {
         return false;
       }
     }
