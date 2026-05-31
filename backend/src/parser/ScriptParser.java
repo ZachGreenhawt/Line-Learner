@@ -43,7 +43,7 @@ public class ScriptParser {
 
     List<String> lines = LogicalLineBuilder.build(scriptText, chars);
     lines = FurnitureCandidateResolver.resolve(lines, chars);
-    int suggestedBodyStartIndex = chooseStrongestBodyStart(lines, chars);
+    int suggestedBodyStartIndex = suggestedBodyStart(lines, chars);
 
     if (
       !lines.isEmpty() &&
@@ -86,7 +86,7 @@ public class ScriptParser {
     return new ParsedScript(target, cues, mine);
   }
 
-  private static int chooseStrongestBodyStart(
+  public static int suggestedBodyStart(
     List<String> lines,
     Set<String> chars
   ) {

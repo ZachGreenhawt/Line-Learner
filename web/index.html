@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Your Script</title>
+  </head>
+  <body>
+    <main>
+      <h1>Your Script</h1>
+      <pre id="out"></pre>
+    </main>
+    <form id="form" enctype="multipart/form-data">
+      <label for ="file">Upload Your Script (TXT or PDF):</label>
+      <input type="file" id="file" name="user-file" accept=".pdf, .txt"></input>
+
+      <fieldset>
+        <legend>Settings</legend>
+        <label>
+          <input type="checkbox" name="includeStageDir" value="true"></input>
+          Include stage directions in cues
+        </label>
+        <label>
+          <input type="checkbox" name="caseSensitive" value="true"></input>
+          Case sensitive answers
+        </label>
+        <label>
+          <input type="checkbox" name="punctuation" value="true"></input>
+          Keep punctuation
+        </label>
+        <label>
+          <input type="checkbox" name="timedMode" value="true"></input>
+          Timed mode
+        </label>
+      </fieldset>
+
+      <button type="submit">Upload</button>
+    </form>
+    <script type="module" src="/src/main.js">
+    </script>
+  
+  </body>
+</html>

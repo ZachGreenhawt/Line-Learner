@@ -41,6 +41,26 @@ public class ScriptLoader {
     return readPdf(script, session);
   }
 
+  public static String read(File script) throws IOException {
+    if (script == null || !script.exists()) {
+      throw new IOException("Could not find file: " + script);
+    }
+
+    String name = script.getName();
+    String lower = name.toLowerCase();
+
+    if (lower.endsWith(".txt")) {
+      return readTxt(script);
+    }
+    if (lower.endsWith(".pdf")) {
+      ParserSessionStore session = new ParserSessionStore(baseName(name));
+      session.ensureFolders();
+      return readPdf(script, session);
+    }
+
+    throw new IOException("Unsupported file type: " + name);
+  }
+
   private static String extension(Scanner sc) {
     System.out.println(
       "Please enter the number that corresponds with your file type:\n[1] .txt\n[2] .pdf\n(Default is 1)"
@@ -58,6 +78,13 @@ public class ScriptLoader {
       name = sc.nextLine().trim();
     }
     return name;
+  }
+
+  private static String baseName(String name) {
+    if (name == null || name.isBlank()) {
+      return "current_script";
+    }
+    return name.replaceFirst("\\.[^.]+$", "");
   }
 
   private static String readTxt(File script) {

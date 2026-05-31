@@ -1,0 +1,20 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.js",
+    "vite": "vite --host 127.0.0.1",
+    "api": "node server/api-server.js",
+    "build": "vite build",
+    "start": "node server/api-server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "vite": "^8.0.14"
+  }
+}

@@ -15,7 +15,15 @@ parser_health.csv
 
 # Java build output
 out/
+backend/out/
 *.class
+
+# Web data
+.data/
+.bridge-build/
+
+# Local editor settings
+.vscode/settings.json
 
 # macOS
 .DS_Store
