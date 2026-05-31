@@ -1,8 +1,6 @@
-# Generated parser output
+# Parser output
 parser_exports/
 parser_sessions/
-
-# OCR diagnostics
 ocr_diagnostics.csv
 parser_output_pairs.csv
 parser_characters.csv
@@ -18,12 +16,6 @@ out/
 backend/out/
 *.class
 
-# Web data
-.data/
-.bridge-build/
-
-# Local editor settings
+# Editor and OS files
 .vscode/settings.json
-
-# macOS
 .DS_Store
