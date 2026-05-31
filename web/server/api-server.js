@@ -12,6 +12,7 @@ const BACKEND_DIR = path.join(ROOT_DIR, "backend");
 const DATA_DIR = path.join(ROOT_DIR, "web", ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const PORT = Number(process.env.API_PORT || 5174);
+const LIST_SEPARATOR = "\u001F";
 
 await mkdir(UPLOAD_DIR, { recursive: true });
 
@@ -45,12 +46,24 @@ function checked(value) {
 }
 
 function settingsFrom(body) {
+  body = body || {};
+
   return {
     includeStageDir: checked(body.includeStageDir),
     caseSensitive: checked(body.caseSensitive),
     punctuation: checked(body.punctuation),
     timedMode: checked(body.timedMode),
   };
+}
+
+function charactersFrom(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((name) => String(name).trim())
+    .filter(Boolean);
 }
 
 function runBridge(args) {
@@ -145,6 +158,40 @@ app.post("/api/upload", upload.single("user-file"), async (req, res) => {
   }
 });
 
+app.post("/api/parse", async (req, res) => {
+  const settings = settingsFrom(req.body.settings);
+  const characters = charactersFrom(req.body.characters);
+
+  try {
+    const parsed = await runBridge([
+      "parse",
+      req.body.savedPath,
+      req.body.fileName || "",
+      req.body.targetCharacter || "",
+      String(req.body.bodyStartIndex ?? -1),
+      String(settings.includeStageDir),
+      String(settings.caseSensitive),
+      String(settings.punctuation),
+      String(settings.timedMode),
+      characters.join(LIST_SEPARATOR),
+    ]);
+
+    res.json({
+      ok: true,
+      scriptId: req.body.scriptId,
+      fileName: req.body.fileName,
+      settings,
+      characters,
+      parsed,
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Parse failed.",
+    });
+  }
+});
+
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
@@ -152,8 +199,11 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+const server = app.listen(PORT, "127.0.0.1", () => {
   console.log(`API running at http://localhost:${PORT}`);
   console.log(`Backend at ${BACKEND_DIR}`);
   console.log(`Uploads at ${UPLOAD_DIR}`);
 });
+
+process.on("SIGTERM", () => server.close());
+process.on("SIGINT", () => server.close());

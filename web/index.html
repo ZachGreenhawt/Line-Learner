@@ -34,6 +34,22 @@
 
       <button type="submit">Upload</button>
     </form>
+    <section id="characters" hidden>
+      <h2>Characters</h2>
+      <textarea id="character-list" rows="8"></textarea>
+      <button type="button" id="save-characters">Save characters</button>
+    </section>
+    <section id="start-line-section" hidden>
+      <h2>Starting line</h2>
+      <select id="start-line"></select>
+      <button type="button" id="save-start-line">Save starting line</button>
+    </section>
+    <section id="parse-section" hidden>
+      <h2>Parse</h2>
+      <label for="target-character">Your character:</label>
+      <select id="target-character"></select>
+      <button type="button" id="parse">Parse script</button>
+    </section>
     <script type="module" src="/src/main.js">
     </script>
   

@@ -42,20 +42,26 @@ public class ScriptLoader {
   }
 
   public static String read(File script) throws IOException {
+    return read(script, null);
+  }
+
+  public static String read(File script, String originalName)
+    throws IOException {
     if (script == null || !script.exists()) {
       throw new IOException("Could not find file: " + script);
     }
 
-    String name = script.getName();
+    String name = scriptName(script, originalName);
     String lower = name.toLowerCase();
+    String pathLower = script.getName().toLowerCase();
 
-    if (lower.endsWith(".txt")) {
+    if (lower.endsWith(".txt") || pathLower.endsWith(".txt")) {
       return readTxt(script);
     }
-    if (lower.endsWith(".pdf")) {
-      ParserSessionStore session = new ParserSessionStore(baseName(name));
+    if (lower.endsWith(".pdf") || pathLower.endsWith(".pdf")) {
+      ParserSessionStore session = new ParserSessionStore(sessionName(name));
       session.ensureFolders();
-      return readPdf(script, session);
+      return readPdf(script, session, name);
     }
 
     throw new IOException("Unsupported file type: " + name);
@@ -87,6 +93,17 @@ public class ScriptLoader {
     return name.replaceFirst("\\.[^.]+$", "");
   }
 
+  private static String sessionName(String name) {
+    return baseName(name).toLowerCase();
+  }
+
+  private static String scriptName(File script, String originalName) {
+    if (originalName != null && !originalName.isBlank()) {
+      return originalName.trim();
+    }
+    return script.getName();
+  }
+
   private static String readTxt(File script) {
     try {
       return normalize(
@@ -99,13 +116,21 @@ public class ScriptLoader {
   }
 
   private static String readPdf(File script, ParserSessionStore session) {
+    return readPdf(script, session, script.getName());
+  }
+
+  private static String readPdf(
+    File script,
+    ParserSessionStore session,
+    String name
+  ) {
     if (!USE_EXTRACTED_TEXT_CACHE) {
       return pdf(script);
     }
 
     Path cacheFile = session.textPath();
     Path metaFile = cacheFile.resolveSibling("extracted_text.meta");
-    String expectedMeta = meta(script);
+    String expectedMeta = meta(script, name);
 
     String cached = readCache(cacheFile, metaFile, expectedMeta);
     if (!cached.isEmpty()) {
@@ -131,7 +156,7 @@ public class ScriptLoader {
         metaFile,
         StandardCharsets.UTF_8
       ).trim();
-      if (!expectedMeta.equals(actualMeta)) {
+      if (!sameMeta(actualMeta, expectedMeta)) {
         return "";
       }
 
@@ -165,14 +190,41 @@ public class ScriptLoader {
     }
   }
 
-  private static String meta(File script) {
+  private static String meta(File script, String name) {
     return String.format(
-      "pipeline=%s\nfile=%s\nsize=%d\nmodified=%d",
+      "pipeline=%s\nfile=%s\nsize=%d",
       EXTRACTION_PIPELINE_VERSION,
-      script.getName(),
-      script.length(),
-      script.lastModified()
+      scriptName(script, name).toLowerCase(),
+      script.length()
     );
+  }
+
+  private static boolean sameMeta(String actual, String expected) {
+    if (expected.equals(actual)) {
+      return true;
+    }
+
+    return (
+      metaValue(actual, "pipeline").equals(metaValue(expected, "pipeline")) &&
+      metaValue(actual, "file").equalsIgnoreCase(metaValue(expected, "file")) &&
+      metaValue(actual, "size").equals(metaValue(expected, "size"))
+    );
+  }
+
+  private static String metaValue(String meta, String key) {
+    if (meta == null || key == null) {
+      return "";
+    }
+
+    String prefix = key + "=";
+    for (String line : meta.split("\\R")) {
+      String trimmed = line.trim();
+      if (trimmed.startsWith(prefix)) {
+        return trimmed.substring(prefix.length()).trim();
+      }
+    }
+
+    return "";
   }
 
   private static String pdf(File script) {

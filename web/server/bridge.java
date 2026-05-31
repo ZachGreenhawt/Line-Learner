@@ -4,16 +4,28 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import parser.CharacterExtractor;
+import parser.CuePairBuilder;
 import parser.LogicalLineBuilder;
 import parser.ScriptLoader;
 import parser.ScriptParser;
 import parser.ScriptPreProcess;
+import parser.SpeakerBlockBuilder;
+import parser.TurnBuilder;
 import parser.detect.FurnitureCandidateResolver;
+import parser.detect.SpeakerHeadingIndex;
+import parser.model.ParseModels;
+import practice.Settings;
 
 public class bridge {
+
+  private static final String LIST_SEPARATOR = "\u001F";
 
   public static void main(String[] args) {
     PrintStream stdout = System.out;
@@ -21,7 +33,7 @@ public class bridge {
 
     try {
       System.setOut(new PrintStream(logs));
-      String response = analyze(args);
+      String response = route(args);
       System.setOut(stdout);
       stdout.println(response);
     } catch (Throwable error) {
@@ -31,25 +43,27 @@ public class bridge {
     }
   }
 
-  private static String analyze(String[] args) throws Exception {
+  private static String route(String[] args) throws Exception {
     if (args == null || args.length < 2) {
-      throw new IllegalArgumentException("Usage: analyze <file-path> [name]");
+      throw new IllegalArgumentException("Usage: analyze|parse <file-path> ...");
     }
 
     String command = args[0];
-    if (!"analyze".equals(command) && !"parse".equals(command)) {
-      throw new IllegalArgumentException("Unknown command: " + command);
+    if ("analyze".equals(command)) {
+      return analyze(args);
+    }
+    if ("parse".equals(command)) {
+      return parse(args);
     }
 
+    throw new IllegalArgumentException("Unknown command: " + command);
+  }
+
+  private static String analyze(String[] args) throws Exception {
     File file = Paths.get(args[1]).toFile();
     String name = args.length > 2 ? args[2] : file.getName();
-    String text = ScriptPreProcess.clean(ScriptLoader.read(file));
-    Set<String> chars = CharacterExtractor.expand(
-      CharacterExtractor.find(text)
-    );
-    List<String> lines = LogicalLineBuilder.build(text, chars);
-    lines = FurnitureCandidateResolver.resolve(lines, chars);
-    int bodyStart = ScriptParser.suggestedBodyStart(lines, chars);
+    Script script = script(file, name, new LinkedHashSet<>());
+    int bodyStart = ScriptParser.suggestedBodyStart(script.lines, script.chars);
 
     return (
       "{" +
@@ -58,21 +72,143 @@ public class bridge {
       quote(name) +
       "," +
       "\"textLength\":" +
-      text.length() +
+      script.text.length() +
       "," +
       "\"lineCount\":" +
-      lines.size() +
+      script.lines.size() +
       "," +
       "\"bodyStartIndex\":" +
       bodyStart +
       "," +
       "\"characters\":" +
-      jsonArray(CharacterExtractor.sort(chars)) +
+      jsonArray(CharacterExtractor.sort(script.chars)) +
       "," +
       "\"preview\":" +
-      preview(lines, bodyStart) +
+      preview(script.lines, bodyStart) +
       "}"
     );
+  }
+
+  private static String parse(String[] args) throws Exception {
+    if (args.length < 10) {
+      throw new IllegalArgumentException(
+        "Usage: parse <file-path> <name> <target> <start> <stage> <case> <punctuation> <timed> <characters>"
+      );
+    }
+
+    File file = Paths.get(args[1]).toFile();
+    String name = args[2];
+    String target = args[3];
+    int requestedStart = parseInt(args[4], -1);
+    Settings settings = new Settings(
+      yes(args[5]),
+      yes(args[6]),
+      yes(args[7]),
+      yes(args[8])
+    );
+
+    Script script = script(file, name, characters(args[9]));
+    String cleanTarget = CharacterExtractor.target(target, script.chars);
+    int start = requestedStart >= 0
+      ? clamp(requestedStart, 0, Math.max(0, script.lines.size() - 1))
+      : ScriptParser.suggestedBodyStart(script.lines, script.chars);
+
+    List<String> bodyLines = script.lines.isEmpty()
+      ? new ArrayList<>()
+      : new ArrayList<>(script.lines.subList(start, script.lines.size()));
+
+    Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings =
+      SpeakerHeadingIndex.build(bodyLines, script.chars, new HashMap<>());
+    List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
+      bodyLines,
+      headings
+    );
+    List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
+    CuePairBuilder.Result pairs = CuePairBuilder.build(
+      turns,
+      cleanTarget,
+      settings
+    );
+
+    return (
+      "{" +
+      "\"ok\":true," +
+      "\"fileName\":" +
+      quote(name) +
+      "," +
+      "\"targetCharacter\":" +
+      quote(cleanTarget) +
+      "," +
+      "\"bodyStartIndex\":" +
+      start +
+      "," +
+      "\"turnCount\":" +
+      turns.size() +
+      "," +
+      "\"total\":" +
+      pairs.mine.size() +
+      "," +
+      "\"items\":" +
+      items(pairs.cues, pairs.mine) +
+      "}"
+    );
+  }
+
+  private static Script script(File file, String name, Set<String> suppliedChars)
+    throws Exception {
+    String text = ScriptPreProcess.clean(ScriptLoader.read(file, name));
+    Set<String> chars = suppliedChars == null
+      ? new LinkedHashSet<>()
+      : new LinkedHashSet<>(suppliedChars);
+
+    if (chars.isEmpty()) {
+      chars.addAll(CharacterExtractor.find(text));
+    }
+
+    chars = CharacterExtractor.expand(chars);
+    List<String> lines = LogicalLineBuilder.build(text, chars);
+    lines = FurnitureCandidateResolver.resolve(lines, chars);
+    return new Script(text, chars, lines);
+  }
+
+  private static Set<String> characters(String text) {
+    Set<String> chars = new LinkedHashSet<>();
+    if (text == null || text.isBlank()) {
+      return chars;
+    }
+
+    for (String part : text.split(LIST_SEPARATOR, -1)) {
+      String name = part.trim();
+      if (!name.isEmpty()) {
+        chars.add(name);
+      }
+    }
+
+    return chars;
+  }
+
+  private static String items(List<String> cues, List<String> lines) {
+    StringBuilder json = new StringBuilder("[");
+    int count = Math.min(cues.size(), lines.size());
+
+    for (int i = 0; i < count; i++) {
+      if (i > 0) {
+        json.append(',');
+      }
+      json
+        .append('{')
+        .append("\"index\":")
+        .append(i)
+        .append(',')
+        .append("\"cue\":")
+        .append(quote(cues.get(i)))
+        .append(',')
+        .append("\"line\":")
+        .append(quote(lines.get(i)))
+        .append('}');
+    }
+
+    return json.append(']').toString();
   }
 
   private static String preview(List<String> lines, int bodyStart) {
@@ -112,6 +248,22 @@ public class bridge {
       json.append(quote(values.get(i)));
     }
     return json.append(']').toString();
+  }
+
+  private static boolean yes(String value) {
+    return "true".equalsIgnoreCase(value) || "1".equals(value);
+  }
+
+  private static int parseInt(String value, int fallback) {
+    try {
+      return Integer.parseInt(value);
+    } catch (NumberFormatException error) {
+      return fallback;
+    }
+  }
+
+  private static int clamp(int value, int min, int max) {
+    return Math.max(min, Math.min(value, max));
   }
 
   private static String quote(String value) {
@@ -169,5 +321,18 @@ public class bridge {
       quote(logs) +
       "}"
     );
+  }
+
+  private static class Script {
+
+    final String text;
+    final Set<String> chars;
+    final List<String> lines;
+
+    Script(String text, Set<String> chars, List<String> lines) {
+      this.text = text == null ? "" : text;
+      this.chars = chars == null ? new LinkedHashSet<>() : chars;
+      this.lines = lines == null ? new ArrayList<>() : lines;
+    }
   }
 }
