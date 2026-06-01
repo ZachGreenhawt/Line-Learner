@@ -49,7 +49,7 @@ If the bridge classes need to be rebuilt manually:
 javac -cp "backend/lib/*" -d web/.bridge-build $(find backend/src -name "*.java") web/server/bridge.java
 ```
 
-On Windows, replace `:` with `;` in Java classpaths.
+On Windows, replace `:` with `;`
 
 ## Terminal App
 
@@ -73,12 +73,7 @@ javac -cp "backend/lib/*" -d out $(find backend/src -name "*.java")
 java -cp "out:backend/lib/*" app.Main
 ```
 
-On Windows:
-
-```bash
-javac -cp "backend/lib/*" -d out $(find backend/src -name "*.java")
-java -cp "out;backend/lib/*" app.Main
-```
+On Windows replace `:` with `;`
 
 ## Project Structure
 
