@@ -17,5 +17,5 @@ backend/out/
 *.class
 
 # Editor and OS files
-.vscode/settings.json
+.vscode
 .DS_Store
