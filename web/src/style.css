@@ -1,0 +1,116 @@
+:root {
+  --ink: #2c2722;
+  --page: #f2f0e8;
+  --paper: #e6e3d8;
+  --pencil: #5a5249;
+  --line: #9a958c;
+  --accent: #3d342a;
+}
+
+body {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem;
+  color: var(--ink);
+  background: var(--page);
+  font-family: "Manrope", system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0;
+  color: var(--ink);
+  font-family: "Teko", sans-serif;
+  font-size: 4rem;
+  font-weight: 600;
+  line-height: 0.95;
+}
+
+h2 {
+  margin: 1.5rem 0 0.5rem;
+  color: var(--ink);
+  font-family: "Inter Tight", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+p {
+  margin: 0.5rem 0;
+}
+
+#out {
+  color: var(--pencil);
+  font-style: italic;
+}
+
+form,
+section {
+  margin-top: 1.25rem;
+}
+
+fieldset {
+  margin: 1rem 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  margin-bottom: 0.5rem;
+  color: var(--pencil);
+  font-family: "Inter Tight", sans-serif;
+  font-weight: 500;
+}
+
+label {
+  display: block;
+  margin: 0.5rem 0;
+  color: var(--pencil);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input[type="file"],
+select,
+textarea {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--ink);
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+}
+
+button:hover {
+  background: rgba(44, 39, 34, 0.08);
+}
+
+blockquote {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1rem;
+  color: var(--ink);
+}
+
+details {
+  margin-top: 0.75rem;
+}
