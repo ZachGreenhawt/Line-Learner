@@ -25,6 +25,8 @@ let currentScript = null;
 let practiceItems = [];
 let practiceIndex = 0;
 
+show(form);
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -46,44 +48,38 @@ form.addEventListener("submit", async (e) => {
 
   useScript(
     data,
-    data.message || "Upload saved. Review the setup before parsing."
+    data.message || "Upload saved. Review the setup before parsing.",
   );
 });
 
 saveCharacters.addEventListener("click", () => {
   if (!currentScript) return;
 
-  currentScript.characters = cleanCharacters(characterList.value);
-  characterList.value = currentScript.characters.join("\n");
-  showTargetCharacters(currentScript.characters);
-
-  out.textContent = "Characters saved.";
+  saveCharactersStep();
+  show(startLineSection);
 });
 
 saveStartLine.addEventListener("click", () => {
   if (!currentScript) return;
 
-  currentScript.bodyStartIndex = Number(startLine.value);
-
-  out.textContent = "Starting line saved.";
+  saveStartLineStep();
+  show(removeLinesSection);
 });
 
 saveRemoveLines.addEventListener("click", () => {
   if (!currentScript) return;
 
-  currentScript.removeLines = cleanList(removeLines.value);
-  removeLines.value = currentScript.removeLines.join("\n");
-
-  out.textContent = "Removals saved.";
+  saveRemoveLinesStep();
+  show(parseSection);
 });
 
 parse.addEventListener("click", async () => {
   if (!currentScript) return;
 
   currentScript.settings = settingsFromForm();
-  currentScript.characters = cleanCharacters(characterList.value);
-  currentScript.bodyStartIndex = Number(startLine.value);
-  currentScript.removeLines = cleanList(removeLines.value);
+  saveCharactersStep();
+  saveStartLineStep();
+  saveRemoveLinesStep();
 
   out.textContent = "Parsing...";
 
@@ -131,12 +127,8 @@ function useScript(data, message) {
   showStartLines(data.analysis.preview || [], currentScript.bodyStartIndex);
   showTargetCharacters(currentScript.characters);
 
-  characters.hidden = false;
-  startLineSection.hidden = false;
-  removeLinesSection.hidden = false;
-  parseSection.hidden = false;
-  practiceSection.hidden = true;
   out.textContent = message;
+  show(characters);
 }
 
 function settingsFromForm() {
@@ -153,6 +145,32 @@ function showSettings(settings) {
   form.elements.caseSensitive.checked = Boolean(settings.caseSensitive);
   form.elements.punctuation.checked = Boolean(settings.punctuation);
   form.elements.timedMode.checked = Boolean(settings.timedMode);
+}
+
+function show(section) {
+  form.hidden = true;
+  characters.hidden = true;
+  startLineSection.hidden = true;
+  removeLinesSection.hidden = true;
+  parseSection.hidden = true;
+  practiceSection.hidden = true;
+  section.hidden = false;
+  window.scrollTo(0, 0);
+}
+
+function saveCharactersStep() {
+  currentScript.characters = cleanCharacters(characterList.value);
+  characterList.value = currentScript.characters.join("\n");
+  showTargetCharacters(currentScript.characters);
+}
+
+function saveStartLineStep() {
+  currentScript.bodyStartIndex = Number(startLine.value);
+}
+
+function saveRemoveLinesStep() {
+  currentScript.removeLines = cleanList(removeLines.value);
+  removeLines.value = currentScript.removeLines.join("\n");
 }
 
 checkAnswer.addEventListener("click", () => {
@@ -176,9 +194,9 @@ checkAnswer.addEventListener("click", () => {
 });
 
 nextLine.addEventListener("click", () => {
-  if (!practiceItems.length) return;
+  if (practiceIndex >= practiceItems.length - 1) return;
 
-  practiceIndex = (practiceIndex + 1) % practiceItems.length;
+  practiceIndex += 1;
   showPracticeItem();
 });
 
@@ -230,7 +248,7 @@ function cleanList(text) {
 function startPractice(items) {
   practiceItems = Array.isArray(items) ? items : [];
   practiceIndex = 0;
-  practiceSection.hidden = false;
+  show(practiceSection);
   showPracticeItem();
 }
 
@@ -253,7 +271,7 @@ function showPracticeItem() {
   practiceCue.textContent = item.cue;
   expectedLine.textContent = item.line;
   checkAnswer.disabled = false;
-  nextLine.disabled = practiceItems.length < 2;
+  nextLine.disabled = practiceIndex >= practiceItems.length - 1;
   practiceAnswer.focus();
 }
 

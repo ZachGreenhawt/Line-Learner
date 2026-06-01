@@ -42,6 +42,10 @@ p {
   font-style: italic;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 form,
 section {
   margin-top: 1.25rem;
@@ -103,6 +107,14 @@ button {
 
 button:hover {
   background: rgba(44, 39, 34, 0.08);
+}
+
+button:disabled,
+button:disabled:hover {
+  color: var(--line);
+  background: var(--paper);
+  border-color: var(--line);
+  cursor: not-allowed;
 }
 
 blockquote {
