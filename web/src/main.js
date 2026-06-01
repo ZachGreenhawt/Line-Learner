@@ -6,6 +6,9 @@ const saveCharacters = document.querySelector("#save-characters");
 const startLineSection = document.querySelector("#start-line-section");
 const startLine = document.querySelector("#start-line");
 const saveStartLine = document.querySelector("#save-start-line");
+const removeLinesSection = document.querySelector("#remove-lines-section");
+const removeLines = document.querySelector("#remove-lines");
+const saveRemoveLines = document.querySelector("#save-remove-lines");
 const parseSection = document.querySelector("#parse-section");
 const targetCharacter = document.querySelector("#target-character");
 const parse = document.querySelector("#parse");
@@ -41,24 +44,10 @@ form.addEventListener("submit", async (e) => {
     return;
   }
 
-  currentScript = {
-    scriptId: data.scriptId,
-    fileName: data.fileName,
-    savedPath: data.savedPath,
-    settings: data.settings,
-    characters: data.analysis.characters || [],
-    bodyStartIndex: data.analysis.bodyStartIndex,
-  };
-
-  characterList.value = currentScript.characters.join("\n");
-  showStartLines(data.analysis.preview || [], currentScript.bodyStartIndex);
-  showTargetCharacters(currentScript.characters);
-
-  characters.hidden = false;
-  startLineSection.hidden = false;
-  parseSection.hidden = false;
-  practiceSection.hidden = true;
-  out.textContent = "Upload saved. Review the characters and starting line.";
+  useScript(
+    data,
+    data.message || "Upload saved. Review the setup before parsing."
+  );
 });
 
 saveCharacters.addEventListener("click", () => {
@@ -79,11 +68,22 @@ saveStartLine.addEventListener("click", () => {
   out.textContent = "Starting line saved.";
 });
 
+saveRemoveLines.addEventListener("click", () => {
+  if (!currentScript) return;
+
+  currentScript.removeLines = cleanList(removeLines.value);
+  removeLines.value = currentScript.removeLines.join("\n");
+
+  out.textContent = "Removals saved.";
+});
+
 parse.addEventListener("click", async () => {
   if (!currentScript) return;
 
+  currentScript.settings = settingsFromForm();
   currentScript.characters = cleanCharacters(characterList.value);
   currentScript.bodyStartIndex = Number(startLine.value);
+  currentScript.removeLines = cleanList(removeLines.value);
 
   out.textContent = "Parsing...";
 
@@ -98,6 +98,7 @@ parse.addEventListener("click", async () => {
       savedPath: currentScript.savedPath,
       settings: currentScript.settings,
       characters: currentScript.characters,
+      removeLines: currentScript.removeLines,
       bodyStartIndex: currentScript.bodyStartIndex,
       targetCharacter: targetCharacter.value,
     }),
@@ -112,6 +113,47 @@ parse.addEventListener("click", async () => {
 
   out.textContent = data.error || "Parse failed.";
 });
+
+function useScript(data, message) {
+  currentScript = {
+    scriptId: data.scriptId,
+    fileName: data.fileName,
+    savedPath: data.savedPath,
+    settings: data.settings || settingsFromForm(),
+    characters: data.analysis.characters || [],
+    bodyStartIndex: data.analysis.bodyStartIndex,
+    removeLines: data.removeLines || [],
+  };
+
+  showSettings(currentScript.settings);
+  characterList.value = currentScript.characters.join("\n");
+  removeLines.value = currentScript.removeLines.join("\n");
+  showStartLines(data.analysis.preview || [], currentScript.bodyStartIndex);
+  showTargetCharacters(currentScript.characters);
+
+  characters.hidden = false;
+  startLineSection.hidden = false;
+  removeLinesSection.hidden = false;
+  parseSection.hidden = false;
+  practiceSection.hidden = true;
+  out.textContent = message;
+}
+
+function settingsFromForm() {
+  return {
+    includeStageDir: form.elements.includeStageDir.checked,
+    caseSensitive: form.elements.caseSensitive.checked,
+    punctuation: form.elements.punctuation.checked,
+    timedMode: form.elements.timedMode.checked,
+  };
+}
+
+function showSettings(settings) {
+  form.elements.includeStageDir.checked = Boolean(settings.includeStageDir);
+  form.elements.caseSensitive.checked = Boolean(settings.caseSensitive);
+  form.elements.punctuation.checked = Boolean(settings.punctuation);
+  form.elements.timedMode.checked = Boolean(settings.timedMode);
+}
 
 checkAnswer.addEventListener("click", () => {
   const item = practiceItems[practiceIndex];
@@ -166,18 +208,23 @@ function showTargetCharacters(names) {
 }
 
 function cleanCharacters(text) {
+  return cleanList(text).map((name) => name.toUpperCase());
+}
+
+function cleanList(text) {
   const seen = new Set();
-  const names = [];
+  const values = [];
 
-  for (const line of text.split(/\r?\n/)) {
-    const name = line.trim().replace(/\s+/g, " ").toUpperCase();
-    if (!name || seen.has(name)) continue;
+  for (const line of text.split(/[,\r\n]+/)) {
+    const value = line.trim().replace(/\s+/g, " ");
+    const key = value.toUpperCase();
+    if (!value || seen.has(key)) continue;
 
-    seen.add(name);
-    names.push(name);
+    seen.add(key);
+    values.push(value);
   }
 
-  return names;
+  return values;
 }
 
 function startPractice(items) {

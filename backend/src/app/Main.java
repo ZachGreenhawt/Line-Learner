@@ -1,5 +1,7 @@
 package app;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import parser.ScriptLoader;
 import parser.ScriptParser;
@@ -73,26 +75,15 @@ public class Main {
     String input = sc.nextLine().trim();
     if (input.isEmpty()) return text;
 
-    String cleaned = text;
-    String[] phrases = input.split(RegexTerms.COMMA);
+    List<String> phrases = new ArrayList<>();
 
-    for (String phrase : phrases) {
-      phrase = phrase.trim();
-      if (!phrase.isEmpty()) {
-        cleaned = removePhrase(cleaned, phrase);
+    for (String phrase : input.split(RegexTerms.COMMA)) {
+      String cleaned = phrase.trim();
+      if (!cleaned.isEmpty()) {
+        phrases.add(cleaned);
       }
     }
 
-    return cleaned;
-  }
-
-  private static String removePhrase(String text, String phrase) {
-    if (text == null || text.isBlank()) return "";
-    if (phrase == null || phrase.isBlank()) return text;
-
-    return text.replaceAll(
-      RegexTerms.CASE_INSENSITIVE_FLAG + java.util.regex.Pattern.quote(phrase),
-      " "
-    );
+    return ScriptPreProcess.removePhrases(text, phrases);
   }
 }

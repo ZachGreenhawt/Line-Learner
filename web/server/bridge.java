@@ -45,7 +45,9 @@ public class bridge {
 
   private static String route(String[] args) throws Exception {
     if (args == null || args.length < 2) {
-      throw new IllegalArgumentException("Usage: analyze|parse <file-path> ...");
+      throw new IllegalArgumentException(
+        "Usage: analyze|parse <file-path> ..."
+      );
     }
 
     String command = args[0];
@@ -90,9 +92,9 @@ public class bridge {
   }
 
   private static String parse(String[] args) throws Exception {
-    if (args.length < 10) {
+    if (args.length < 11) {
       throw new IllegalArgumentException(
-        "Usage: parse <file-path> <name> <target> <start> <stage> <case> <punctuation> <timed> <characters>"
+        "Usage: parse <file-path> <name> <target> <start> <stage> <case> <punctuation> <timed> <characters> <remove-phrases>"
       );
     }
 
@@ -107,11 +109,12 @@ public class bridge {
       yes(args[8])
     );
 
-    Script script = script(file, name, characters(args[9]));
+    Script script = script(file, name, characters(args[9]), list(args[10]));
     String cleanTarget = CharacterExtractor.target(target, script.chars);
-    int start = requestedStart >= 0
-      ? clamp(requestedStart, 0, Math.max(0, script.lines.size() - 1))
-      : ScriptParser.suggestedBodyStart(script.lines, script.chars);
+    int start =
+      requestedStart >= 0
+        ? clamp(requestedStart, 0, Math.max(0, script.lines.size() - 1))
+        : ScriptParser.suggestedBodyStart(script.lines, script.chars);
 
     List<String> bodyLines = script.lines.isEmpty()
       ? new ArrayList<>()
@@ -154,12 +157,28 @@ public class bridge {
     );
   }
 
-  private static Script script(File file, String name, Set<String> suppliedChars)
-    throws Exception {
+  private static Script script(
+    File file,
+    String name,
+    Set<String> suppliedChars
+  ) throws Exception {
+    return script(file, name, suppliedChars, new ArrayList<>());
+  }
+
+  private static Script script(
+    File file,
+    String name,
+    Set<String> suppliedChars,
+    List<String> removePhrases
+  ) throws Exception {
     String text = ScriptPreProcess.clean(ScriptLoader.read(file, name));
-    Set<String> chars = suppliedChars == null
-      ? new LinkedHashSet<>()
-      : new LinkedHashSet<>(suppliedChars);
+    text = ScriptPreProcess.removePhrases(text, removePhrases);
+    text = ScriptPreProcess.clean(text);
+
+    Set<String> chars =
+      suppliedChars == null
+        ? new LinkedHashSet<>()
+        : new LinkedHashSet<>(suppliedChars);
 
     if (chars.isEmpty()) {
       chars.addAll(CharacterExtractor.find(text));
@@ -185,6 +204,22 @@ public class bridge {
     }
 
     return chars;
+  }
+
+  private static List<String> list(String text) {
+    List<String> values = new ArrayList<>();
+    if (text == null || text.isBlank()) {
+      return values;
+    }
+
+    for (String part : text.split(LIST_SEPARATOR, -1)) {
+      String value = part.trim();
+      if (!value.isEmpty()) {
+        values.add(value);
+      }
+    }
+
+    return values;
   }
 
   private static String items(List<String> cues, List<String> lines) {

@@ -73,6 +73,27 @@ public class ScriptPreProcess {
     return out.toString().replaceFirst(RegexTerms.TRAILING_WHITESPACE, "");
   }
 
+  public static String removePhrases(String text, List<String> phrases) {
+    if (text == null || text.isBlank()) return "";
+    if (phrases == null || phrases.isEmpty()) return text;
+
+    String cleaned = text;
+    for (String phrase : phrases) {
+      cleaned = removePhrase(cleaned, phrase);
+    }
+    return cleaned;
+  }
+
+  private static String removePhrase(String text, String phrase) {
+    if (text == null || text.isBlank()) return "";
+    if (phrase == null || phrase.isBlank()) return text;
+
+    return text.replaceAll(
+      RegexTerms.CASE_INSENSITIVE_FLAG + java.util.regex.Pattern.quote(phrase),
+      " "
+    );
+  }
+
   private static String raw(String text) {
     if (text == null) return "";
 
