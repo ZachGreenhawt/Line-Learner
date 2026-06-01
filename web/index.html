@@ -6,7 +6,7 @@
   <body>
     <main>
       <h1>Your Script</h1>
-      <pre id="out"></pre>
+      <p id="out" role="status"></p>
     </main>
     <form id="form" enctype="multipart/form-data">
       <label for ="file">Upload Your Script (TXT or PDF):</label>
@@ -49,6 +49,21 @@
       <label for="target-character">Your character:</label>
       <select id="target-character"></select>
       <button type="button" id="parse">Parse script</button>
+    </section>
+    <section id="practice-section" hidden>
+      <h2>Practice</h2>
+      <p id="practice-count"></p>
+      <p><strong>Cue:</strong></p>
+      <blockquote id="practice-cue"></blockquote>
+      <label for="practice-answer">Your line:</label>
+      <textarea id="practice-answer" rows="4"></textarea>
+      <button type="button" id="check-answer">Check</button>
+      <button type="button" id="next-line">Next line</button>
+      <p id="practice-feedback"></p>
+      <details id="answer-details">
+        <summary>Show answer</summary>
+        <p id="expected-line"></p>
+      </details>
     </section>
     <script type="module" src="/src/main.js">
     </script>

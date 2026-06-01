@@ -9,7 +9,18 @@ const saveStartLine = document.querySelector("#save-start-line");
 const parseSection = document.querySelector("#parse-section");
 const targetCharacter = document.querySelector("#target-character");
 const parse = document.querySelector("#parse");
+const practiceSection = document.querySelector("#practice-section");
+const practiceCount = document.querySelector("#practice-count");
+const practiceCue = document.querySelector("#practice-cue");
+const practiceAnswer = document.querySelector("#practice-answer");
+const checkAnswer = document.querySelector("#check-answer");
+const nextLine = document.querySelector("#next-line");
+const practiceFeedback = document.querySelector("#practice-feedback");
+const answerDetails = document.querySelector("#answer-details");
+const expectedLine = document.querySelector("#expected-line");
 let currentScript = null;
+let practiceItems = [];
+let practiceIndex = 0;
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -26,7 +37,7 @@ form.addEventListener("submit", async (e) => {
   const data = await res.json();
 
   if (!data.ok) {
-    out.textContent = data.err || "Upload failed";
+    out.textContent = data.error || "Upload failed.";
     return;
   }
 
@@ -46,7 +57,8 @@ form.addEventListener("submit", async (e) => {
   characters.hidden = false;
   startLineSection.hidden = false;
   parseSection.hidden = false;
-  out.textContent = JSON.stringify(data, null, 2);
+  practiceSection.hidden = true;
+  out.textContent = "Upload saved. Review the characters and starting line.";
 });
 
 saveCharacters.addEventListener("click", () => {
@@ -56,19 +68,7 @@ saveCharacters.addEventListener("click", () => {
   characterList.value = currentScript.characters.join("\n");
   showTargetCharacters(currentScript.characters);
 
-  out.textContent = JSON.stringify(
-    {
-      ok: true,
-      message: "Characters saved.",
-      scriptId: currentScript.scriptId,
-      fileName: currentScript.fileName,
-      settings: currentScript.settings,
-      bodyStartIndex: currentScript.bodyStartIndex,
-      characters: currentScript.characters,
-    },
-    null,
-    2
-  );
+  out.textContent = "Characters saved.";
 });
 
 saveStartLine.addEventListener("click", () => {
@@ -76,19 +76,7 @@ saveStartLine.addEventListener("click", () => {
 
   currentScript.bodyStartIndex = Number(startLine.value);
 
-  out.textContent = JSON.stringify(
-    {
-      ok: true,
-      message: "Starting line saved.",
-      scriptId: currentScript.scriptId,
-      fileName: currentScript.fileName,
-      settings: currentScript.settings,
-      bodyStartIndex: currentScript.bodyStartIndex,
-      characters: currentScript.characters,
-    },
-    null,
-    2
-  );
+  out.textContent = "Starting line saved.";
 });
 
 parse.addEventListener("click", async () => {
@@ -116,7 +104,40 @@ parse.addEventListener("click", async () => {
   });
 
   const data = await res.json();
-  out.textContent = JSON.stringify(data, null, 2);
+  if (data.ok) {
+    startPractice(data.parsed?.items || []);
+    out.textContent = "Parse complete. Practice is ready.";
+    return;
+  }
+
+  out.textContent = data.error || "Parse failed.";
+});
+
+checkAnswer.addEventListener("click", () => {
+  const item = practiceItems[practiceIndex];
+  if (!item) return;
+
+  const guess = practiceAnswer.value;
+  if (!guess.trim()) {
+    practiceFeedback.textContent = "Type the line first.";
+    return;
+  }
+
+  if (answerKey(guess) === answerKey(item.line)) {
+    practiceFeedback.textContent = "Correct.";
+    answerDetails.open = false;
+    return;
+  }
+
+  practiceFeedback.textContent = "Not quite.";
+  expectedLine.textContent = item.line;
+});
+
+nextLine.addEventListener("click", () => {
+  if (!practiceItems.length) return;
+
+  practiceIndex = (practiceIndex + 1) % practiceItems.length;
+  showPracticeItem();
 });
 
 function showStartLines(lines, bodyStartIndex) {
@@ -157,4 +178,49 @@ function cleanCharacters(text) {
   }
 
   return names;
+}
+
+function startPractice(items) {
+  practiceItems = Array.isArray(items) ? items : [];
+  practiceIndex = 0;
+  practiceSection.hidden = false;
+  showPracticeItem();
+}
+
+function showPracticeItem() {
+  const item = practiceItems[practiceIndex];
+  practiceAnswer.value = "";
+  practiceFeedback.textContent = "";
+  answerDetails.open = false;
+
+  if (!item) {
+    practiceCount.textContent = "No practice lines found.";
+    practiceCue.textContent = "";
+    expectedLine.textContent = "";
+    checkAnswer.disabled = true;
+    nextLine.disabled = true;
+    return;
+  }
+
+  practiceCount.textContent = `${practiceIndex + 1} of ${practiceItems.length}`;
+  practiceCue.textContent = item.cue;
+  expectedLine.textContent = item.line;
+  checkAnswer.disabled = false;
+  nextLine.disabled = practiceItems.length < 2;
+  practiceAnswer.focus();
+}
+
+function answerKey(text) {
+  const settings = currentScript?.settings || {};
+  let value = String(text).trim().replace(/\s+/g, " ");
+
+  if (!settings.punctuation) {
+    value = value.replace(/[^\p{L}\p{N}\s]/gu, "");
+  }
+
+  if (!settings.caseSensitive) {
+    value = value.toLowerCase();
+  }
+
+  return value.trim();
 }
