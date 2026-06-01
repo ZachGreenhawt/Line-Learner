@@ -209,12 +209,24 @@ public class PdfTextExtractor {
 
   private static Tesseract makeTesseract() {
     Tesseract tesseract = new Tesseract();
-
-    tesseract.setDatapath("lib/tessdata");
+    tesseract.setDatapath(tessdataPath());
     tesseract.setLanguage("eng");
     tesseract.setOcrEngineMode(ITessAPI.TessOcrEngineMode.OEM_LSTM_ONLY);
     tesseract.setPageSegMode(ITessAPI.TessPageSegMode.PSM_AUTO);
 
     return tesseract;
+  }
+
+  private static String tessdataPath() {
+    File tessdata = new File("backend/lib/tessdata");
+
+    if (!tessdata.exists()) {
+      tessdata = new File("../backend/lib/tessdata");
+    }
+
+    System.out.println("Tessdata path: " + tessdata.getAbsolutePath());
+    System.out.println("Tessdata exists: " + tessdata.exists());
+
+    return tessdata.getAbsolutePath();
   }
 }

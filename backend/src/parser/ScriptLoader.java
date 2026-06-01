@@ -425,9 +425,10 @@ public class ScriptLoader {
     }
 
     for (String part : parts) {
-      String cleaned = part == null
-        ? ""
-        : part.replaceAll(RegexTerms.NON_ALNUM_UPPER_QUOTE, "");
+      String cleaned =
+        part == null
+          ? ""
+          : part.replaceAll(RegexTerms.NON_ALNUM_UPPER_QUOTE, "");
       if (cleaned.length() <= 1 && !cleaned.matches(RegexTerms.DIGITS_ONLY)) {
         return false;
       }
