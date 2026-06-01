@@ -86,20 +86,22 @@ public class ScriptParser {
     return new ParsedScript(target, cues, mine);
   }
 
-  public static int suggestedBodyStart(
-    List<String> lines,
-    Set<String> chars
-  ) {
+  public static int suggestedBodyStart(List<String> lines, Set<String> chars) {
     if (lines == null || lines.isEmpty()) {
       return 0;
     }
 
     int initial = FrontMatterDetector.bodyStart(lines, chars);
     int safeInitial = Math.max(0, Math.min(initial, lines.size() - 1));
+    int searchEnd = bodyStartSearchEnd(lines, safeInitial);
     int bestIndex = safeInitial;
     int bestScore = playableWindowScore(lines, safeInitial, chars);
 
-    for (int i = safeInitial + 1; i < lines.size(); i++) {
+    for (int i = safeInitial + 1; i < searchEnd; i++) {
+      if (!candidateBodyStartLine(lines, i, chars)) {
+        continue;
+      }
+
       int score = playableWindowScore(lines, i, chars);
 
       if (score >= bestScore + 6 && looksLikePlayableWindow(lines, i, chars)) {
@@ -109,6 +111,43 @@ public class ScriptParser {
     }
 
     return backtrackFromBridgeLine(lines, bestIndex, chars);
+  }
+
+  private static int bodyStartSearchEnd(List<String> lines, int safeInitial) {
+    if (lines == null || lines.isEmpty()) {
+      return 0;
+    }
+
+    int size = lines.size();
+    int earlyLimit = Math.min(size, Math.max(120, size / 4));
+    int fromInitialLimit = Math.min(size, safeInitial + 180);
+
+    return Math.max(safeInitial + 1, Math.min(earlyLimit, fromInitialLimit));
+  }
+
+  private static boolean candidateBodyStartLine(
+    List<String> lines,
+    int index,
+    Set<String> chars
+  ) {
+    if (
+      lines == null || lines.isEmpty() || index < 0 || index >= lines.size()
+    ) {
+      return false;
+    }
+
+    String line = TextNormalizer.norm(lines.get(index));
+    if (line.isEmpty() || FrontMatterDetector.blockHeading(line, chars)) {
+      return false;
+    }
+
+    if (frontMatterProse(line)) {
+      return false;
+    }
+
+    return (
+      bodyMarkerLine(line) || speakerLine(line, chars) || stageLine(line, chars)
+    );
   }
 
   private static int playableWindowScore(
@@ -252,10 +291,7 @@ public class ScriptParser {
         continue;
       }
 
-      if (
-        speakerLine(previous, chars) ||
-        bodyMarkerLine(previous)
-      ) {
+      if (speakerLine(previous, chars) || bodyMarkerLine(previous)) {
         return i;
       }
     }
@@ -296,10 +332,7 @@ public class ScriptParser {
     );
   }
 
-  private static boolean stageLine(
-    String line,
-    Set<String> chars
-  ) {
+  private static boolean stageLine(String line, Set<String> chars) {
     String t = TextNormalizer.norm(line);
     if (t.isEmpty()) {
       return false;
@@ -317,10 +350,7 @@ public class ScriptParser {
     );
   }
 
-  private static boolean speakerLine(
-    String line,
-    Set<String> chars
-  ) {
+  private static boolean speakerLine(String line, Set<String> chars) {
     String t = TextNormalizer.norm(line);
     if (t.isEmpty()) {
       return false;
@@ -335,16 +365,17 @@ public class ScriptParser {
     );
   }
 
-  private static boolean bodyDialogueLine(
-    String line,
-    Set<String> chars
-  ) {
+  private static boolean bodyDialogueLine(String line, Set<String> chars) {
     String t = TextNormalizer.norm(line);
     if (t.isEmpty()) {
       return false;
     }
 
     if (FrontMatterDetector.blockHeading(t, chars)) {
+      return false;
+    }
+
+    if (frontMatterProse(t) || bodyMarkerLine(t) || stageLine(t, chars)) {
       return false;
     }
 
