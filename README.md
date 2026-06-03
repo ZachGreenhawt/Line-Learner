@@ -32,6 +32,10 @@ The web app provides the main workflow without needing to use the terminal promp
 
 Uploaded scripts are saved in `web/.data/uploads/`. The server fingerprints uploads by file contents, and if the same file is uploaded multiple times, it reuses the saved copy and cached extraction rather than treating it as a new script
 
+## Run through the Website
+
+[Your Script](https://www.yourscript.app/).
+
 ### Run The Web App
 
 From `web/`:
