@@ -134,3 +134,7 @@ Scripts can contain sensitive material. Line-Learner runs locally and does **not
 ## Why This Project
 
 As a theatre student, I wanted a tool that focuses on the hardest part of memorization: hearing the cue and responding with the correct line. The project grew from a simple rehearsal utility into a larger system for parsing real scripts, handling messy PDFs and OCR output, and preserving uncertain text conservatively instead of guessing incorrectly.
+
+## Disclosure
+
+Some deployment and web-integration code connecting the Vercel frontend to the Railway backend was implemented with help from an AI coding assistant, under my direction and review. The parser code, design system, UI/UX decisions, and final review are my own. I’m noting this for transparency.
