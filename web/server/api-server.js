@@ -118,7 +118,9 @@ function listFrom(value) {
 }
 
 function safeFileName(name, fallback = "script.txt") {
-  const base = path.basename(name || fallback).replace(/[^A-Za-z0-9._ -]/g, "_");
+  const base = path
+    .basename(name || fallback)
+    .replace(/[^A-Za-z0-9._ -]/g, "_");
   return base || fallback;
 }
 
@@ -291,8 +293,7 @@ function runBridge(args) {
 
     child.on("close", (code, signal) => {
       if (code !== 0) {
-        const status =
-          signal ? `signal ${signal}` : `status ${code}`;
+        const status = signal ? `signal ${signal}` : `status ${code}`;
         reject(new Error(stderr || `Bridge exited with ${status}`));
         return;
       }
@@ -453,8 +454,9 @@ app.post("/api/analyze-text", async (req, res) => {
   }
 
   const requestedName = safeFileName(req.body.fileName, "Pasted Script.txt");
-  const fileName = requestedName.toLowerCase().endsWith(".txt")
-    ? requestedName
+  const fileName =
+    requestedName.toLowerCase().endsWith(".txt") ?
+      requestedName
     : `${requestedName}.txt`;
   const filename = `${crypto.randomUUID()}.txt`;
   const filePath = path.join(UPLOAD_DIR, filename);
@@ -517,7 +519,8 @@ app.post("/api/parse", async (req, res) => {
     if (!script) {
       res.status(404).json({
         ok: false,
-        error: "That uploaded script could not be found. Upload it again to continue.",
+        error:
+          "That uploaded script could not be found. Upload it again to continue.",
       });
       return;
     }
@@ -550,6 +553,175 @@ app.post("/api/parse", async (req, res) => {
     res.status(500).json({
       ok: false,
       error: error.message || "Parse failed.",
+    });
+  }
+});
+
+// ── Feedback email via Resend ───────────────────────────────────────────────
+// Railway provides these through environment variables.
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const FEEDBACK_FROM =
+  process.env.FEEDBACK_FROM || "Your Script <noreply@yourscript.app>";
+const FEEDBACK_IMPACT_TO =
+  process.env.FEEDBACK_IMPACT_TO || "impact@yourscript.app";
+const FEEDBACK_DEBUG_TO =
+  process.env.FEEDBACK_DEBUG_TO || "debug@yourscript.app";
+
+function cleanText(value, max = 8000) {
+  if (typeof value !== "string") return "";
+  return value.replace(/\r\n?/g, "\n").trim().slice(0, max);
+}
+
+function cleanEmail(value) {
+  return cleanText(value, 254).toLowerCase();
+}
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function feedbackSubject(kind) {
+  if (kind === "error") return "[Your Script] Parser issue";
+  if (kind === "story") return "[Your Script] A success story";
+  return "[Your Script] Feedback";
+}
+
+function feedbackTo(kind) {
+  return kind === "error" ? FEEDBACK_DEBUG_TO : FEEDBACK_IMPACT_TO;
+}
+
+function feedbackBody(body, kind) {
+  const note = cleanText(body.note, 5000);
+  const senderEmail = cleanEmail(body.senderEmail);
+  const from = cleanText(body.from, 80);
+  const diagnostics = cleanText(body.diagnostics, 12000);
+  const error = body.error && typeof body.error === "object" ? body.error : {};
+
+  const lines = [];
+
+  if (kind === "error") {
+    lines.push(
+      "Something didn't parse right. Details below:",
+      "",
+      "What went wrong:",
+      note || "(no note provided)",
+      "",
+      "-- debug info --",
+      `message: ${cleanText(error.message, 500) || "(none)"}`,
+      `where:   ${cleanText(error.context, 200) || from || "(unknown)"}`,
+    );
+  } else if (kind === "story") {
+    lines.push(
+      "Sharing a win with Your Script:",
+      "",
+      note || "(no note provided)",
+    );
+  } else {
+    lines.push("Your note:", "", note || "(no note provided)");
+  }
+
+  if (diagnostics) {
+    lines.push("", "-- safe parser diagnostics --", diagnostics);
+  }
+
+  lines.push(
+    "",
+    "-- request context --",
+    `reply to: ${senderEmail}`,
+    `from:    ${from || "(unknown)"}`,
+    `time:    ${cleanText(body.at, 80) || new Date().toISOString()}`,
+    `url:     ${cleanText(body.url, 400)}`,
+    `browser: ${cleanText(body.ua, 500)}`,
+  );
+
+  return lines.join("\n");
+}
+
+function safeErrorLabel(error) {
+  if (!error) return "unknown";
+  if (typeof error.statusCode === "number")
+    return `resend_status_${error.statusCode}`;
+  if (typeof error.status === "number") return `resend_status_${error.status}`;
+  if (error.code) return String(error.code).slice(0, 80);
+  if (error.name) return String(error.name).slice(0, 80);
+  return "send_failed";
+}
+
+async function sendEmail({ to, from, subject, text, replyTo = "" }) {
+  if (!RESEND_API_KEY) {
+    const error = new Error("Email send failed.");
+    error.code = "missing_resend_key";
+    throw error;
+  }
+
+  const payload = {
+    from,
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    text,
+  };
+
+  if (replyTo) {
+    payload.reply_to = replyTo;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+      "User-Agent": "Your Script API",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = new Error("Email send failed.");
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+app.post("/api/feedback", async (req, res) => {
+  const body = req.body || {};
+  const kind = ["error", "story"].includes(body.kind) ? body.kind : "general";
+  const note = cleanText(body.note, 5000);
+  const senderEmail = cleanEmail(body.senderEmail);
+
+  if (!validEmail(senderEmail)) {
+    return res.status(400).json({
+      ok: false,
+      error: "Enter a valid email before sending.",
+    });
+  }
+
+  if (!note && kind !== "error") {
+    return res.status(400).json({
+      ok: false,
+      error: "Write a short note before sending.",
+    });
+  }
+
+  try {
+    const result = await sendEmail({
+      from: FEEDBACK_FROM,
+      to: feedbackTo(kind),
+      subject: feedbackSubject(kind),
+      text: feedbackBody({ ...body, note, senderEmail }, kind),
+      replyTo: senderEmail,
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[feedback] send failed", {
+      reason: safeErrorLabel(error),
+    });
+
+    res.status(500).json({
+      ok: false,
+      error: "Feedback could not be sent right now.",
     });
   }
 });
