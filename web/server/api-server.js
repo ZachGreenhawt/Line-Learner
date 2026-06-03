@@ -272,6 +272,7 @@ function runBridge(args) {
     ].join(path.delimiter);
 
     const child = spawn("java", [
+      "-Xmx256m",
       "-cp",
       classPath,
       "web.server.bridge",
@@ -724,6 +725,10 @@ app.post("/api/feedback", async (req, res) => {
       error: "Feedback could not be sent right now.",
     });
   }
+});
+
+app.post("/api/event", (req, res) => {
+  res.sendStatus(204);
 });
 
 app.use((req, res) => {
