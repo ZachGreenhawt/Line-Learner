@@ -20,7 +20,8 @@ const BACKEND_DIR = path.join(ROOT_DIR, "backend");
 const DATA_DIR = path.join(ROOT_DIR, "web", ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const SCRIPTS_FILE = path.join(DATA_DIR, "scripts.json");
-const PORT = Number(process.env.API_PORT || 5174);
+const PORT = Number(process.env.PORT || process.env.API_PORT || 5174);
+const HOST = process.env.HOST || "0.0.0.0";
 const LIST_SEPARATOR = "\u001F";
 
 await mkdir(UPLOAD_DIR, { recursive: true });
@@ -83,9 +84,7 @@ function listFrom(value) {
     return [];
   }
 
-  return value
-    .map((name) => String(name).trim())
-    .filter(Boolean);
+  return value.map((name) => String(name).trim()).filter(Boolean);
 }
 
 async function readScripts() {
@@ -303,8 +302,9 @@ app.post("/api/upload", upload.single("user-file"), async (req, res) => {
       lastOpenedAt: now,
     };
     const cached = await cachedScriptFor(uploaded);
-    const script = cached
-      ? {
+    const script =
+      cached ?
+        {
           ...cached,
           fileName: cached.fileName || uploaded.fileName,
           settings,
@@ -327,8 +327,9 @@ app.post("/api/upload", upload.single("user-file"), async (req, res) => {
     res.json({
       ok: true,
       cached: Boolean(cached),
-      message: cached
-        ? "Cached upload used. Review the setup before parsing."
+      message:
+        cached ?
+          "Cached upload used. Review the setup before parsing."
         : "Upload saved. Review the setup before parsing.",
       scriptId: script.scriptId,
       fileName: script.fileName,
@@ -394,8 +395,8 @@ app.use((req, res) => {
   });
 });
 
-const server = app.listen(PORT, "127.0.0.1", () => {
-  console.log(`API running at http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`API running at http://${HOST}:${PORT}`);
   console.log(`Backend at ${BACKEND_DIR}`);
   console.log(`Uploads at ${UPLOAD_DIR}`);
 });

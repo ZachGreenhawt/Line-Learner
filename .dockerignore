@@ -1,0 +1,13 @@
+.git
+.DS_Store
+
+backend/out
+parser_exports
+parser_sessions
+
+web/.bridge-build
+web/.data
+web/dist
+web/node_modules
+web/parser_sessions
+web/ocr_diagnostics.csv
