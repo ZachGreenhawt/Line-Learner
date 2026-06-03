@@ -22,6 +22,11 @@ const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const SCRIPTS_FILE = path.join(DATA_DIR, "scripts.json");
 const PORT = Number(process.env.PORT || process.env.API_PORT || 5174);
 const HOST = process.env.HOST || "0.0.0.0";
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || "*")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const CORS_ALLOW_ALL = CORS_ORIGINS.includes("*");
 const LIST_SEPARATOR = "\u001F";
 
 await mkdir(UPLOAD_DIR, { recursive: true });
@@ -45,6 +50,25 @@ const upload = multer({
 });
 
 app.use(express.json());
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (CORS_ALLOW_ALL) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  } else if (origin && CORS_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
 app.use(express.static(path.join(ROOT_DIR, "web", "dist")));
 
 function scriptIdFor(file) {
@@ -68,7 +92,9 @@ function settingsFrom(body) {
   body = body || {};
 
   return {
-    includeStageDir: checked(body.includeStageDir),
+    includeStageDir:
+      checked(body.includeStageDir) ||
+      checked(body.includeStageDirectionsInCue),
     caseSensitive: checked(body.caseSensitive),
     punctuation: checked(body.punctuation),
     timedMode: checked(body.timedMode),
@@ -80,11 +106,20 @@ function charactersFrom(value) {
 }
 
 function listFrom(value) {
+  if (typeof value === "string") {
+    value = value.split(/[,\r\n]+/);
+  }
+
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value.map((name) => String(name).trim()).filter(Boolean);
+}
+
+function safeFileName(name, fallback = "script.txt") {
+  const base = path.basename(name || fallback).replace(/[^A-Za-z0-9._ -]/g, "_");
+  return base || fallback;
 }
 
 async function readScripts() {
@@ -277,12 +312,86 @@ function runBridge(args) {
   });
 }
 
+async function analyzeFile(file, body) {
+  const scriptId = scriptIdFor(file);
+  const settings = settingsFrom(body);
+
+  const now = new Date().toISOString();
+  const uploaded = {
+    scriptId,
+    fileName: file.originalname,
+    savedPath: file.path,
+    size: file.size,
+    settings,
+    fingerprint: await fileHash(file.path),
+    uploadedAt: now,
+    lastOpenedAt: now,
+  };
+  const cached = await cachedScriptFor(uploaded);
+  const script =
+    cached ?
+      {
+        ...cached,
+        fileName: cached.fileName || uploaded.fileName,
+        settings,
+        lastOpenedAt: now,
+      }
+    : uploaded;
+
+  if (cached) {
+    await deleteUpload(file.path);
+  }
+
+  const analysis = await runBridge([
+    "analyze",
+    script.savedPath,
+    script.fileName,
+  ]);
+
+  await saveScript(script);
+
+  return {
+    ok: true,
+    cached: Boolean(cached),
+    message:
+      cached ?
+        "Cached upload used. Review the setup before parsing."
+      : "Upload saved. Review the setup before parsing.",
+    scriptId: script.scriptId,
+    fileName: script.fileName,
+    savedPath: script.savedPath,
+    size: script.size,
+    settings: script.settings,
+    analysis,
+  };
+}
+
+function sendMissingScript(res) {
+  res.status(400).json({
+    ok: false,
+    error: "Please choose a script file.",
+  });
+}
+
+app.get("/api/health", async (req, res) => {
+  try {
+    const backend = await stat(path.join(BACKEND_DIR, "src"));
+    res.json({
+      ok: true,
+      service: "line-learner-api",
+      backendFound: backend.isDirectory(),
+    });
+  } catch {
+    res.status(500).json({
+      ok: false,
+      error: "Backend folder was not found.",
+    });
+  }
+});
+
 app.post("/api/upload", upload.single("user-file"), async (req, res) => {
   if (!req.file) {
-    res.status(400).json({
-      ok: false,
-      error: "Please choose a script file.",
-    });
+    sendMissingScript(res);
     return;
   }
 
@@ -290,54 +399,8 @@ app.post("/api/upload", upload.single("user-file"), async (req, res) => {
   const settings = settingsFrom(req.body);
 
   try {
-    const now = new Date().toISOString();
-    const uploaded = {
-      scriptId,
-      fileName: req.file.originalname,
-      savedPath: req.file.path,
-      size: req.file.size,
-      settings,
-      fingerprint: await fileHash(req.file.path),
-      uploadedAt: now,
-      lastOpenedAt: now,
-    };
-    const cached = await cachedScriptFor(uploaded);
-    const script =
-      cached ?
-        {
-          ...cached,
-          fileName: cached.fileName || uploaded.fileName,
-          settings,
-          lastOpenedAt: now,
-        }
-      : uploaded;
-
-    if (cached) {
-      await deleteUpload(req.file.path);
-    }
-
-    const analysis = await runBridge([
-      "analyze",
-      script.savedPath,
-      script.fileName,
-    ]);
-
-    await saveScript(script);
-
-    res.json({
-      ok: true,
-      cached: Boolean(cached),
-      message:
-        cached ?
-          "Cached upload used. Review the setup before parsing."
-        : "Upload saved. Review the setup before parsing.",
-      scriptId: script.scriptId,
-      fileName: script.fileName,
-      savedPath: script.savedPath,
-      size: script.size,
-      settings: script.settings,
-      analysis,
-    });
+    const result = await analyzeFile(req.file, req.body);
+    res.json(result);
   } catch (error) {
     res.status(500).json({
       ok: false,
@@ -351,16 +414,116 @@ app.post("/api/upload", upload.single("user-file"), async (req, res) => {
   }
 });
 
+app.post("/api/analyze", upload.single("script"), async (req, res) => {
+  if (!req.file) {
+    sendMissingScript(res);
+    return;
+  }
+
+  try {
+    const result = await analyzeFile(req.file, req.body);
+    res.json({
+      ...result.analysis,
+      scriptId: result.scriptId,
+      fileName: result.fileName,
+      savedPath: result.savedPath,
+      size: result.size,
+      settings: result.settings,
+      cached: result.cached,
+      analysis: result.analysis,
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Bridge failed.",
+    });
+  }
+});
+
+app.post("/api/analyze-text", async (req, res) => {
+  const text = String(req.body?.text || "");
+  if (!text.trim()) {
+    res.status(400).json({
+      ok: false,
+      error: "Paste script text before parsing.",
+    });
+    return;
+  }
+
+  const requestedName = safeFileName(req.body.fileName, "Pasted Script.txt");
+  const fileName = requestedName.toLowerCase().endsWith(".txt")
+    ? requestedName
+    : `${requestedName}.txt`;
+  const filename = `${crypto.randomUUID()}.txt`;
+  const filePath = path.join(UPLOAD_DIR, filename);
+
+  try {
+    await writeFile(filePath, text, "utf8");
+    const result = await analyzeFile(
+      {
+        filename,
+        originalname: fileName,
+        path: filePath,
+        size: Buffer.byteLength(text),
+      },
+      req.body,
+    );
+    res.json({
+      ...result.analysis,
+      scriptId: result.scriptId,
+      fileName: result.fileName,
+      savedPath: result.savedPath,
+      size: result.size,
+      settings: result.settings,
+      cached: result.cached,
+      analysis: result.analysis,
+    });
+  } catch (error) {
+    await deleteUpload(filePath);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Bridge failed.",
+    });
+  }
+});
+
+async function scriptFrom(body) {
+  if (body.savedPath) {
+    return {
+      scriptId: body.scriptId,
+      fileName: body.fileName || "",
+      savedPath: body.savedPath,
+    };
+  }
+
+  const scripts = await existingScripts(await readScripts());
+  const script = scripts.find((item) => item.scriptId === body.scriptId);
+  if (!script) {
+    return null;
+  }
+
+  return script;
+}
+
 app.post("/api/parse", async (req, res) => {
   const settings = settingsFrom(req.body.settings);
   const characters = charactersFrom(req.body.characters);
-  const removeLines = listFrom(req.body.removeLines);
+  const removeLines = listFrom(req.body.removeLines || req.body.cleanup);
 
   try {
+    const script = await scriptFrom(req.body);
+    if (!script) {
+      res.status(404).json({
+        ok: false,
+        error: "That uploaded script could not be found. Upload it again to continue.",
+      });
+      return;
+    }
+
     const parsed = await runBridge([
       "parse",
-      req.body.savedPath,
-      req.body.fileName || "",
+      script.savedPath,
+      script.fileName || "",
       req.body.targetCharacter || "",
       String(req.body.bodyStartIndex ?? -1),
       String(settings.includeStageDir),
@@ -372,9 +535,10 @@ app.post("/api/parse", async (req, res) => {
     ]);
 
     res.json({
+      ...parsed,
       ok: true,
-      scriptId: req.body.scriptId,
-      fileName: req.body.fileName,
+      scriptId: script.scriptId,
+      fileName: script.fileName,
       settings,
       characters,
       removeLines,
