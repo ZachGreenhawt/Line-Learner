@@ -4,8 +4,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import net.sourceforge.tess4j.ITessAPI;
-import net.sourceforge.tess4j.Tesseract;
 import ocr.model.*;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -45,7 +43,7 @@ public class PdfTextExtractor {
 
     try (PDDocument document = Loader.loadPDF(pdf)) {
       PDFRenderer renderer = new PDFRenderer(document);
-      Tesseract tesseract = makeTesseract();
+      TesseractCli tesseract = makeTesseract();
 
       for (
         int pageIndex = 0;
@@ -207,14 +205,8 @@ public class PdfTextExtractor {
     return text.replaceAll(RegexTerms.NEWLINE_RUN, "\\n\\n");
   }
 
-  private static Tesseract makeTesseract() {
-    Tesseract tesseract = new Tesseract();
-    tesseract.setDatapath(tessdataPath());
-    tesseract.setLanguage("eng");
-    tesseract.setOcrEngineMode(ITessAPI.TessOcrEngineMode.OEM_LSTM_ONLY);
-    tesseract.setPageSegMode(ITessAPI.TessPageSegMode.PSM_AUTO);
-
-    return tesseract;
+  private static TesseractCli makeTesseract() {
+    return new TesseractCli(tessdataPath(), "eng", 1, 3);
   }
 
   private static String tessdataPath() {

@@ -7,14 +7,13 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import net.sourceforge.tess4j.Tesseract;
 import ocr.model.*;
 
 public class OrientationResolver {
 
   public static String text(
     BufferedImage image,
-    Tesseract tesseract,
+    TesseractCli tesseract,
     int page,
     int region
   ) throws Exception {
@@ -23,7 +22,7 @@ public class OrientationResolver {
 
   public static OcrResult result(
     BufferedImage image,
-    Tesseract tesseract,
+    TesseractCli tesseract,
     int page,
     int region
   ) throws Exception {
@@ -32,7 +31,7 @@ public class OrientationResolver {
 
   public static OcrResult result(
     BufferedImage image,
-    Tesseract tesseract,
+    TesseractCli tesseract,
     int page,
     int region,
     OcrRunProfile profile
