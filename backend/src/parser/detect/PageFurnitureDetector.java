@@ -619,6 +619,9 @@ public class PageFurnitureDetector {
     if (upper == null || upper.isBlank()) {
       return false;
     }
+    if (upper.matches(RegexTerms.CONTAINS_BANG_QUESTION)) {
+      return false;
+    }
 
     return (
       upper.matches(
