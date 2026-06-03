@@ -272,7 +272,7 @@ function runBridge(args) {
     ].join(path.delimiter);
 
     const child = spawn("java", [
-      "-Xmx384m",
+      "-Xmx600m",
       "-cp",
       classPath,
       "web.server.bridge",
