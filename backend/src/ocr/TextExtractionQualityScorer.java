@@ -156,6 +156,17 @@ public class TextExtractionQualityScorer {
       return false;
     }
 
+    if (
+      quality.score >= 0.85 &&
+      quality.length >= 5000 &&
+      quality.nonBlankLines >= 80 &&
+      quality.garbageLineRatio <= 0.08 &&
+      quality.weirdRatio <= 0.02 &&
+      quality.replacementRatio <= 0.002
+    ) {
+      return true;
+    }
+
     return !looksLikeBadHiddenOcrLayer(text);
   }
 

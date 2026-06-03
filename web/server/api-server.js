@@ -289,9 +289,11 @@ function runBridge(args) {
 
     child.on("error", reject);
 
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       if (code !== 0) {
-        reject(new Error(stderr || `Bridge exited with status ${code}`));
+        const status =
+          signal ? `signal ${signal}` : `status ${code}`;
+        reject(new Error(stderr || `Bridge exited with ${status}`));
         return;
       }
 
