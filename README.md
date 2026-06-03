@@ -46,7 +46,7 @@ The Vite app runs on `http://localhost:5173`, and the API server runs on `http:/
 If the bridge classes need to be rebuilt manually:
 
 ```bash
-javac -cp "backend/lib/*" -d web/.bridge-build $(find backend/src -name "*.java") web/server/bridge.java
+javac -encoding UTF-8 -cp "backend/lib/*" -d web/.bridge-build $(find backend/src -name "*.java") web/server/bridge.java
 ```
 
 On Windows, replace `:` with `;`
@@ -69,7 +69,7 @@ The terminal app still supports the original full prompt flow:
 From the project root:
 
 ```bash
-javac -cp "backend/lib/*" -d out $(find backend/src -name "*.java")
+javac -encoding UTF-8 -cp "backend/lib/*" -d out $(find backend/src -name "*.java")
 java -cp "out:backend/lib/*" app.Main
 ```
 

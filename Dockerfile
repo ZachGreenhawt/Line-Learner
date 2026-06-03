@@ -10,7 +10,7 @@ COPY backend ./backend
 COPY web ./web
 
 RUN cd web && npm ci
-RUN javac -cp "backend/lib/*" -d web/.bridge-build $(find backend/src -name "*.java") web/server/bridge.java
+RUN javac -encoding UTF-8 -cp "backend/lib/*" -d web/.bridge-build $(find backend/src -name "*.java") web/server/bridge.java
 RUN cd web && npm run build -- --configLoader runner
 
 ENV NODE_ENV=production
