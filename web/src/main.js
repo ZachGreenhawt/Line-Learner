@@ -21,6 +21,7 @@ const nextLine = document.querySelector("#next-line");
 const practiceFeedback = document.querySelector("#practice-feedback");
 const answerDetails = document.querySelector("#answer-details");
 const expectedLine = document.querySelector("#expected-line");
+const finishSession = document.querySelector("#finish-session");
 let currentScript = null;
 let practiceItems = [];
 let practiceIndex = 0;
@@ -137,6 +138,7 @@ function settingsFromForm() {
     caseSensitive: form.elements.caseSensitive.checked,
     punctuation: form.elements.punctuation.checked,
     timedMode: form.elements.timedMode.checked,
+    includeMusic: form.elements.includeMusic.checked,
   };
 }
 
@@ -145,6 +147,7 @@ function showSettings(settings) {
   form.elements.caseSensitive.checked = Boolean(settings.caseSensitive);
   form.elements.punctuation.checked = Boolean(settings.punctuation);
   form.elements.timedMode.checked = Boolean(settings.timedMode);
+  form.elements.includeMusic.checked = Boolean(settings.includeMusic);
 }
 
 function show(section) {
@@ -274,6 +277,30 @@ function showPracticeItem() {
   nextLine.disabled = practiceIndex >= practiceItems.length - 1;
   practiceAnswer.focus();
 }
+
+finishSession.addEventListener("click", async () => {
+  const scriptId = currentScript?.scriptId;
+  if (!scriptId) {
+    out.textContent = "Nothing to delete.";
+    return;
+  }
+
+  out.textContent = "Deleting your script and its extracted text...";
+  try {
+    await fetch("/api/session/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scriptId }),
+    });
+  } catch {}
+
+  currentScript = null;
+  practiceItems = [];
+  practiceIndex = 0;
+  form.reset();
+  show(form);
+  out.textContent = "Your script and its extracted text were deleted.";
+});
 
 function answerKey(text) {
   const settings = currentScript?.settings || {};

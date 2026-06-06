@@ -8,17 +8,20 @@ public class Settings {
   private final boolean caseSensitive;
   private final boolean punctuation;
   private final boolean timedMode;
+  private final boolean includeMusicAsLines;
 
   public Settings(
     boolean includeStageDirectionsInCue,
     boolean caseSensitive,
     boolean punctuation,
-    boolean timedMode
+    boolean timedMode,
+    boolean includeMusicAsLines
   ) {
     this.includeStageDirectionsInCue = includeStageDirectionsInCue;
     this.caseSensitive = caseSensitive;
     this.punctuation = punctuation;
     this.timedMode = timedMode;
+    this.includeMusicAsLines = includeMusicAsLines;
   }
 
   public static Settings menu(Scanner sc) {
@@ -45,11 +48,16 @@ public class Settings {
     System.out.println("Timed mode? (yes/no)");
     boolean timedMode = sc.nextLine().trim().equalsIgnoreCase("yes");
 
+    //Music setting
+    System.out.println("Include music (songs/lyrics) as lines? (yes/no)");
+    boolean includeMusicAsLines = sc.nextLine().trim().equalsIgnoreCase("yes");
+
     return new Settings(
       includeStageDirectionsInCue,
       caseSensitive,
       punctuation,
-      timedMode
+      timedMode,
+      includeMusicAsLines
     );
   }
 
@@ -67,5 +75,9 @@ public class Settings {
 
   public boolean punctuation() {
     return punctuation;
+  }
+
+  public boolean includeMusicAsLines() {
+    return includeMusicAsLines;
   }
 }

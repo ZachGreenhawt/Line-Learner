@@ -81,10 +81,10 @@ public final class RegexTerms {
     "WAITRESS|BELLBOY|JANITOR|MAID|SERVANT|KING|QUEEN|PRINCE|PRINCESS|" +
     "DUKE|DUCHESS|LORD|LADY|FIRST|SECOND|THIRD|FOURTH|YOUNG|OLD|OLDER|" +
     "ELDERLY|CHORUS|ENSEMBLE|CROWD|GROUP|OFFSTAGE|ANNOUNCER|NARRATOR|" +
-    "ADDING|FILING|TELEPHONE|DEFENSE|DEFENCE|PROSECUTION|BARBER|LOVER|" +
+    "ADDING|FILING|TELEPHONE|DEFENSE|PROSECUTION|BARBER|LOVER|" +
     "HUCKSTER|SPECTATOR|SPECTATORS|JUROR|JURY|WITNESS|POLICEMAN|POLICE|" +
     "ATTENDANT|STRANGER|CUSTOMER|WORKER|SECRETARY|STENOGRAPHER|OPERATOR|" +
-    "MESSENGER|BAILIFF|USHER|PERSON|SOMEONE|SOMEBODY|ACTOR|ACTRESS|" +
+    "MESSENGER|BAILIFF|USHER|PERSON|SOMEONE|SOMEBODY|" +
     "PLAYER|PERFORMER|TYPIST|BYSTANDER";
 
   public static final String SPEAKER_ARTICLE_HEADING_PATTERN =
@@ -496,6 +496,26 @@ public final class RegexTerms {
     ".*\\b(the|and|that|with|this|was|for|you|she|he|they)\\b.*";
   public static final String OCR_STAGE_HINT =
     ".*\\b(enters|exits|crosses|sits|stands|looks|nods|shakes|pause|beat|silence)\\b.*";
+
+  // MusicDetector
+
+  public static final String SONG_NUMBER_MARKER =
+    "^#\\s*\\d{1,3}[A-Za-z]?\\b.*";
+  public static final String SONG_NO_MARKER =
+    "(?i)^(no\\.?|number)\\s*\\d{1,3}[A-Za-z]?\\b.*";
+  public static final String MUSICAL_NUMBERS_HEADING =
+    "(?i)^musical numbers?\\b.*";
+  public static final String SONG_CUE_MARKER =
+    "(?i)^[\\[(]?\\s*(reprise|underscore|under-score|vamp|playoff|play-off|" +
+    "playout|segue|entr'?acte|exit music|incidental music|music cue)\\b.*";
+  public static final String SINGS_PARENTHETICAL =
+    "(?i).*\\([^)]*\\b(sings?|singing|sung)\\b[^)]*\\).*";
+  public static final String MUSIC_TECH_OPEN =
+    "(?i)^[\\[(]?\\s*music\\s+(in|begins?|starts?|cue|under(score)?|swells?|continues?|resumes?)\\b.*";
+  public static final String MUSIC_TECH_CLOSE =
+    "(?i)^[\\[(]?\\s*(the\\s+)?(music|song)\\s+(out|ends?|stops?|fades?|finishes?)\\b.*";
+  public static final String SONG_REGION_BOUNDARY =
+    "(?i)^(act|scene|episode|intermission|end of)\\b.*";
 
   private RegexTerms() {}
 

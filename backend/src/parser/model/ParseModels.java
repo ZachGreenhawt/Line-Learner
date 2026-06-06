@@ -9,6 +9,7 @@ public class ParseModels {
     public final String speaker;
     public final String text;
     public final boolean stage;
+    public final boolean music;
     public final String source;
     public final String notes;
 
@@ -18,6 +19,7 @@ public class ParseModels {
       String speaker,
       String text,
       boolean stage,
+      boolean music,
       String source,
       String notes
     ) {
@@ -26,6 +28,7 @@ public class ParseModels {
       this.speaker = safe(speaker);
       this.text = safe(text);
       this.stage = stage;
+      this.music = music;
       this.source = safe(source);
       this.notes = safe(notes);
     }
@@ -50,6 +53,7 @@ public class ParseModels {
     public final String reason;
     public final BlockType type;
     public final boolean stage;
+    public final boolean music;
 
     public Block(
       int startLine,
@@ -62,6 +66,32 @@ public class ParseModels {
       BlockType type,
       boolean stage
     ) {
+      this(
+        startLine,
+        endLine,
+        speaker,
+        text,
+        source,
+        confidence,
+        reason,
+        type,
+        stage,
+        false
+      );
+    }
+
+    public Block(
+      int startLine,
+      int endLine,
+      String speaker,
+      String text,
+      String source,
+      String confidence,
+      String reason,
+      BlockType type,
+      boolean stage,
+      boolean music
+    ) {
       this.startLine = startLine;
       this.endLine = endLine;
       this.speaker = safe(speaker);
@@ -71,6 +101,7 @@ public class ParseModels {
       this.reason = safe(reason);
       this.type = type == null ? BlockType.UNKNOWN_DIALOGUE : type;
       this.stage = stage;
+      this.music = music;
     }
   }
 

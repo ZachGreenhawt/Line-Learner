@@ -92,9 +92,9 @@ public class bridge {
   }
 
   private static String parse(String[] args) throws Exception {
-    if (args.length < 11) {
+    if (args.length < 12) {
       throw new IllegalArgumentException(
-        "Usage: parse <file-path> <name> <target> <start> <stage> <case> <punctuation> <timed> <characters> <remove-phrases>"
+        "Usage: parse <file-path> <name> <target> <start> <stage> <case> <punctuation> <timed> <music> <characters> <remove-phrases>"
       );
     }
 
@@ -106,10 +106,11 @@ public class bridge {
       yes(args[5]),
       yes(args[6]),
       yes(args[7]),
-      yes(args[8])
+      yes(args[8]),
+      yes(args[9])
     );
 
-    Script script = script(file, name, characters(args[9]), list(args[10]));
+    Script script = script(file, name, characters(args[10]), list(args[11]));
     String cleanTarget = CharacterExtractor.target(target, script.chars);
     int start =
       requestedStart >= 0
@@ -124,7 +125,8 @@ public class bridge {
       SpeakerHeadingIndex.build(bodyLines, script.chars, new HashMap<>());
     List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
       bodyLines,
-      headings
+      headings,
+      script.chars
     );
     List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
     CuePairBuilder.Result pairs = CuePairBuilder.build(

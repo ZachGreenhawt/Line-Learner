@@ -8,6 +8,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  rm,
   stat,
   unlink,
   writeFile,
@@ -20,6 +21,8 @@ const BACKEND_DIR = path.join(ROOT_DIR, "backend");
 const DATA_DIR = path.join(ROOT_DIR, "web", ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const SCRIPTS_FILE = path.join(DATA_DIR, "scripts.json");
+const PARSER_SESSIONS_DIR = path.join(DATA_DIR, "parser_sessions");
+const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 60 * 60 * 1000;
 const PORT = Number(process.env.PORT || process.env.API_PORT || 5174);
 const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || "*")
@@ -81,6 +84,7 @@ function defaultSettings() {
     caseSensitive: false,
     punctuation: false,
     timedMode: false,
+    includeMusic: false,
   };
 }
 
@@ -98,6 +102,8 @@ function settingsFrom(body) {
     caseSensitive: checked(body.caseSensitive),
     punctuation: checked(body.punctuation),
     timedMode: checked(body.timedMode),
+    includeMusic:
+      checked(body.includeMusic) || checked(body.includeMusicAsLines),
   };
 }
 
@@ -264,15 +270,110 @@ async function deleteUpload(file) {
   }
 }
 
-function runBridge(args) {
+async function deleteSession(scriptId) {
+  if (!scriptId) {
+    return;
+  }
+
+  try {
+    const uploads = await readdir(UPLOAD_DIR);
+    for (const file of uploads) {
+      if (path.parse(file).name === scriptId) {
+        await deleteUpload(path.join(UPLOAD_DIR, file));
+      }
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  await rm(path.join(PARSER_SESSIONS_DIR, scriptId), {
+    recursive: true,
+    force: true,
+  });
+
+  const scripts = await readScripts();
+  const remaining = scripts.filter((script) => script.scriptId !== scriptId);
+  if (remaining.length !== scripts.length) {
+    await writeScripts(remaining);
+  }
+}
+
+async function touchScript(scriptId) {
+  if (!scriptId) {
+    return;
+  }
+  try {
+    const scripts = await readScripts();
+    let changed = false;
+    for (const script of scripts) {
+      if (script.scriptId === scriptId) {
+        script.lastOpenedAt = new Date().toISOString();
+        changed = true;
+      }
+    }
+    if (changed) {
+      await writeScripts(scripts);
+    }
+  } catch {}
+}
+async function cleanupExpiredSessions() {
+  const now = Date.now();
+  const live = new Set();
+
+  try {
+    const scripts = await readScripts();
+    for (const script of scripts) {
+      const stamp = Date.parse(script.lastOpenedAt || script.uploadedAt || "");
+      if (stamp && now - stamp > SESSION_TTL_MS) {
+        await deleteSession(script.scriptId);
+      } else {
+        live.add(script.scriptId);
+      }
+    }
+  } catch {}
+
+  await sweepOrphans(UPLOAD_DIR, now, live, (name) => path.parse(name).name);
+  await sweepOrphans(PARSER_SESSIONS_DIR, now, live, (name) => name);
+}
+
+async function sweepOrphans(dir, now, live, idOf) {
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return;
+  }
+
+  for (const name of entries) {
+    if (live.has(idOf(name))) {
+      continue;
+    }
+    const target = path.join(dir, name);
+    try {
+      const info = await stat(target);
+      if (now - info.mtimeMs > SESSION_TTL_MS) {
+        await rm(target, { recursive: true, force: true });
+      }
+    } catch {}
+  }
+}
+
+function runBridge(args, { scriptId } = {}) {
   return new Promise((resolve, reject) => {
     const classPath = [
       path.join(ROOT_DIR, "web", ".bridge-build"),
       path.join(BACKEND_DIR, "lib", "*"),
     ].join(path.delimiter);
 
+    const jvm = ["-Xmx600m", `-Dll.sessionRoot=${PARSER_SESSIONS_DIR}`];
+    if (scriptId) {
+      jvm.push(`-Dll.sessionId=${scriptId}`);
+    }
+
     const child = spawn("java", [
-      "-Xmx600m",
+      ...jvm,
       "-cp",
       classPath,
       "web.server.bridge",
@@ -346,11 +447,12 @@ async function analyzeFile(file, body) {
     await deleteUpload(file.path);
   }
 
-  const analysis = await runBridge([
-    "analyze",
-    script.savedPath,
-    script.fileName,
-  ]);
+  await saveScript(script);
+
+  const analysis = await runBridge(
+    ["analyze", script.savedPath, script.fileName],
+    { scriptId: script.scriptId },
+  );
 
   await saveScript(script);
 
@@ -526,19 +628,25 @@ app.post("/api/parse", async (req, res) => {
       return;
     }
 
-    const parsed = await runBridge([
-      "parse",
-      script.savedPath,
-      script.fileName || "",
-      req.body.targetCharacter || "",
-      String(req.body.bodyStartIndex ?? -1),
-      String(settings.includeStageDir),
-      String(settings.caseSensitive),
-      String(settings.punctuation),
-      String(settings.timedMode),
-      characters.join(LIST_SEPARATOR),
-      removeLines.join(LIST_SEPARATOR),
-    ]);
+    const parsed = await runBridge(
+      [
+        "parse",
+        script.savedPath,
+        script.fileName || "",
+        req.body.targetCharacter || "",
+        String(req.body.bodyStartIndex ?? -1),
+        String(settings.includeStageDir),
+        String(settings.caseSensitive),
+        String(settings.punctuation),
+        String(settings.timedMode),
+        String(settings.includeMusic),
+        characters.join(LIST_SEPARATOR),
+        removeLines.join(LIST_SEPARATOR),
+      ],
+      { scriptId: script.scriptId },
+    );
+
+    await touchScript(script.scriptId);
 
     res.json({
       ...parsed,
@@ -558,8 +666,28 @@ app.post("/api/parse", async (req, res) => {
   }
 });
 
-// ── Feedback email via Resend ───────────────────────────────────────────────
-// Railway provides these through environment variables.
+app.post(
+  "/api/session/end",
+  express.json({ type: "*/*" }),
+  async (req, res) => {
+    const scriptId = String((req.body && req.body.scriptId) || "").trim();
+    if (!scriptId) {
+      res.status(400).json({ ok: false, error: "Missing scriptId." });
+      return;
+    }
+
+    try {
+      await deleteSession(scriptId);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({
+        ok: false,
+        error: error.message || "Could not end the session.",
+      });
+    }
+  },
+);
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
 const FEEDBACK_FROM =
   process.env.FEEDBACK_FROM || "Your Script <noreply@yourscript.app>";
@@ -743,6 +871,13 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`Backend at ${BACKEND_DIR}`);
   console.log(`Uploads at ${UPLOAD_DIR}`);
 });
+
+cleanupExpiredSessions().catch(() => {});
+const sweepTimer = setInterval(
+  () => cleanupExpiredSessions().catch(() => {}),
+  Math.min(SESSION_TTL_MS, 10 * 60 * 1000),
+);
+sweepTimer.unref();
 
 process.on("SIGTERM", () => server.close());
 process.on("SIGINT", () => server.close());

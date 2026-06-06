@@ -2,9 +2,9 @@ package parser;
 
 import java.util.ArrayList;
 import java.util.List;
-import util.RegexTerms;
 import parser.model.ParseModels;
 import practice.Settings;
+import util.RegexTerms;
 import util.TextNormalizer;
 
 public class CuePairBuilder {
@@ -52,6 +52,11 @@ public class CuePairBuilder {
 
       if (turn.stage) {
         cue = addStage(cue, turn.text, settings);
+        unknownCue = "";
+        continue;
+      }
+
+      if (turn.music && !settings.includeMusicAsLines()) {
         unknownCue = "";
         continue;
       }

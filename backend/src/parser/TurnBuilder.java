@@ -36,6 +36,7 @@ public class TurnBuilder {
       speaker,
       text,
       block.stage,
+      block.music,
       block.source,
       notesFor(block)
     );

@@ -2,6 +2,7 @@ package parser.session;
 
 import java.io.*;
 import java.nio.file.*;
+import java.util.List;
 import util.RegexTerms;
 
 public class ParserSessionStore {
@@ -9,10 +10,12 @@ public class ParserSessionStore {
   private final Path sessionDir;
 
   public ParserSessionStore(String sessionName) {
-    this.sessionDir = Paths.get(
-      "parser_sessions",
-      cleanSessionName(sessionName)
-    );
+    String root = property("ll.sessionRoot", "parser_sessions");
+    String id = property("ll.sessionId", "");
+    String dirName = id.isEmpty()
+      ? cleanSessionName(sessionName)
+      : cleanSessionName(id);
+    this.sessionDir = Paths.get(root, dirName);
   }
 
   public void ensureFolders() {
@@ -35,8 +38,8 @@ public class ParserSessionStore {
     return sessionDir.resolve("aliases.csv");
   }
 
-  public Path textPath() {
-    return sessionDir.resolve("extracted_text.txt");
+  public Path textCsv() {
+    return sessionDir.resolve("extracted_text.csv");
   }
 
   public boolean hasChars() {
@@ -50,8 +53,15 @@ public class ParserSessionStore {
   public void saveText(String text) {
     ensureFolders();
 
+    String body = text == null ? "" : text;
+    String[] lines = body.split("\n", -1);
+    StringBuilder sb = new StringBuilder("line,text\n");
+    for (int i = 0; i < lines.length; i++) {
+      sb.append(i + 1).append(',').append(csvCell(lines[i])).append('\n');
+    }
+
     try {
-      Files.writeString(textPath(), text == null ? "" : text);
+      Files.writeString(textCsv(), sb.toString());
     } catch (IOException e) {
       System.out.println("Could not save extracted text: " + e.getMessage());
     }
@@ -59,13 +69,49 @@ public class ParserSessionStore {
 
   public String loadText() {
     try {
-      if (Files.exists(textPath())) {
-        return Files.readString(textPath());
+      Path csv = textCsv();
+      if (!Files.exists(csv)) {
+        return "";
       }
+
+      List<String> rows = Files.readAllLines(csv);
+      StringBuilder out = new StringBuilder();
+      for (int i = 1; i < rows.size(); i++) {
+        if (i > 1) {
+          out.append('\n');
+        }
+        out.append(csvText(rows.get(i)));
+      }
+      return out.toString();
     } catch (IOException e) {
       System.out.println("Could not load extracted text: " + e.getMessage());
     }
     return "";
+  }
+
+  private static String property(String key, String fallback) {
+    String value = System.getProperty(key);
+    return value == null ? fallback : value.trim();
+  }
+
+  private static String csvCell(String text) {
+    String cleaned = (text == null ? "" : text).replace("\"", "\"\"")
+      .replace("\n", " ")
+      .replace("\r", " ");
+    return "\"" + cleaned + "\"";
+  }
+
+  private static String csvText(String row) {
+    if (row == null) {
+      return "";
+    }
+
+    int comma = row.indexOf(',');
+    String cell = comma < 0 ? row : row.substring(comma + 1);
+    if (cell.length() >= 2 && cell.startsWith("\"") && cell.endsWith("\"")) {
+      cell = cell.substring(1, cell.length() - 1);
+    }
+    return cell.replace("\"\"", "\"");
   }
 
   private static String cleanSessionName(String name) {

@@ -25,6 +25,14 @@ public class SpeakerBlockBuilder {
     List<String> lines,
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings
   ) {
+    return build(lines, headings, null);
+  }
+
+  public static List<ParseModels.Block> build(
+    List<String> lines,
+    Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings,
+    Set<String> chars
+  ) {
     List<ParseModels.Block> blocks = new ArrayList<>();
     if (lines == null || lines.isEmpty()) {
       return blocks;
@@ -80,7 +88,44 @@ public class SpeakerBlockBuilder {
       canRecoverNext = false;
     }
 
-    return blocks;
+    return annotateMusic(blocks, MusicDetector.classify(lines, chars));
+  }
+
+  private static List<ParseModels.Block> annotateMusic(
+    List<ParseModels.Block> blocks,
+    boolean[] music
+  ) {
+    if (blocks == null || blocks.isEmpty() || music == null) {
+      return blocks;
+    }
+
+    List<ParseModels.Block> out = new ArrayList<>(blocks.size());
+    for (ParseModels.Block block : blocks) {
+      if (
+        block != null &&
+        !block.stage &&
+        MusicDetector.blockIsMusic(music, block.startLine, block.endLine)
+      ) {
+        out.add(
+          new ParseModels.Block(
+            block.startLine,
+            block.endLine,
+            block.speaker,
+            block.text,
+            block.source,
+            block.confidence,
+            block.reason,
+            block.type,
+            block.stage,
+            true
+          )
+        );
+      } else {
+        out.add(block);
+      }
+    }
+
+    return out;
   }
 
   private static boolean hasText(ParseModels.Block block) {
@@ -131,6 +176,27 @@ public class SpeakerBlockBuilder {
         mentionedSpeaker = speaker;
       }
       end = i;
+    }
+
+    for (int j = end + 1; j < lines.size(); j++) {
+      if (headingAt(headings, j) != null) {
+        break;
+      }
+      String raw = lines.get(j);
+      String line = TextNormalizer.norm(raw);
+      if (line.isEmpty()) {
+        continue;
+      }
+      if (!wrappedStageContinuation(text.toString(), line)) {
+        break;
+      }
+      appendSpace(text, line);
+      appendSource(source, raw);
+      String speaker = speakerMentionedIn(line, knownSpeakers);
+      if (!speaker.isEmpty()) {
+        mentionedSpeaker = speaker;
+      }
+      end = j;
     }
 
     ParseModels.Block block = new ParseModels.Block(
@@ -212,28 +278,48 @@ public class SpeakerBlockBuilder {
 
       if (role == LineRole.BRIDGE) {
         reason = appendReason(reason, "speaker_bridge");
+        if (wholeParenthetical(line)) {
+          extras.add(parentheticalStage(i, line, raw));
+        }
         continue;
       }
 
       if (role == LineRole.SOURCE_ONLY) {
         reason = appendReason(reason, "source_only_stage");
+        if (wholeParenthetical(line)) {
+          extras.add(parentheticalStage(i, line, raw));
+        }
         continue;
       }
 
-      String spoken = removeStageTail(line, knownSpeakers);
+      String[] tailSplit = splitStageTail(line, knownSpeakers);
+      String spoken =
+        tailSplit == null ? TextNormalizer.norm(line) : tailSplit[0];
 
       if (spoken.isEmpty()) {
+        if (tailSplit != null) {
+          extras.add(trailingStage(i, tailSplit[1], raw));
+        }
         reason = appendReason(reason, "source_only_stage");
         continue;
       }
 
       boolean firstText = text.length() == 0;
-      appendSpace(text, line);
+      appendSpace(text, spoken);
       reason = appendReason(
         reason,
         firstText ? "dialogue_after_heading" : "dialogue_continuation"
       );
-      mode.observe(line);
+      mode.observe(spoken);
+
+      if (tailSplit != null) {
+        if (sameSpeaker(tailSplit[2], heading.canonicalSpeaker)) {
+          appendSpace(text, tailSplit[1]);
+        } else {
+          extras.add(trailingStage(i, tailSplit[1], raw));
+          reason = appendReason(reason, "split_trailing_stage_direction");
+        }
+      }
     }
 
     ParseModels.Block block = new ParseModels.Block(
@@ -251,20 +337,22 @@ public class SpeakerBlockBuilder {
     return new Built(block, end, extras, lastSpeaker);
   }
 
-  private static String removeStageTail(
+  private static String[] splitStageTail(
     String line,
     Set<String> knownSpeakers
   ) {
     String cleaned = TextNormalizer.norm(line);
-    if (
-      cleaned.isEmpty() || knownSpeakers == null || knownSpeakers.isEmpty()
-    ) return cleaned;
+    if (cleaned.isEmpty() || knownSpeakers == null || knownSpeakers.isEmpty()) {
+      return null;
+    }
 
     for (String speaker : CharacterExtractor.sortedNamesByLength(
       knownSpeakers
     )) {
       String name = TextNormalizer.cleanName(speaker);
-      if (name.isEmpty()) continue;
+      if (name.isEmpty()) {
+        continue;
+      }
 
       Pattern pattern = Pattern.compile(
         "\\b" +
@@ -277,11 +365,102 @@ public class SpeakerBlockBuilder {
 
       Matcher matcher = pattern.matcher(cleaned);
       if (matcher.find()) {
-        String before = cleaned.substring(0, matcher.start()).trim();
-        return TextNormalizer.norm(before);
+        String before = TextNormalizer.norm(
+          cleaned.substring(0, matcher.start())
+        );
+        if (
+          !before.isEmpty() && !before.matches(RegexTerms.ENDS_WITH_SENTENCE)
+        ) {
+          continue;
+        }
+        String tail = TextNormalizer.norm(cleaned.substring(matcher.start()));
+        return new String[] { before, tail, name };
       }
     }
-    return cleaned;
+
+    return null;
+  }
+
+  private static boolean sameSpeaker(String tailSpeaker, String canonical) {
+    String x = TextNormalizer.cleanName(tailSpeaker);
+    String y = TextNormalizer.cleanName(canonical);
+    if (x.isEmpty() || y.isEmpty()) {
+      return false;
+    }
+    if (x.equals(y)) {
+      return true;
+    }
+    for (String part : y.split(RegexTerms.WHITESPACE_AROUND_SLASH)) {
+      if (TextNormalizer.cleanName(part).equals(x)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static ParseModels.Block trailingStage(
+    int index,
+    String tail,
+    String raw
+  ) {
+    return new ParseModels.Block(
+      index,
+      index,
+      "",
+      TextNormalizer.norm(tail),
+      raw,
+      "MEDIUM",
+      "split_trailing_stage_direction",
+      ParseModels.BlockType.STAGE_BLOCK,
+      true
+    );
+  }
+
+  private static boolean wholeParenthetical(String line) {
+    String t = TextNormalizer.norm(line);
+    return !t.isEmpty() && StageDetector.whole(t);
+  }
+
+  private static ParseModels.Block parentheticalStage(
+    int index,
+    String line,
+    String raw
+  ) {
+    return new ParseModels.Block(
+      index,
+      index,
+      "",
+      TextNormalizer.norm(line),
+      raw,
+      "HIGH",
+      "inline_parenthetical_direction",
+      ParseModels.BlockType.STAGE_BLOCK,
+      true
+    );
+  }
+
+  private static boolean wrappedStageContinuation(
+    String accumulated,
+    String next
+  ) {
+    String acc = TextNormalizer.norm(accumulated);
+    String nxt = TextNormalizer.norm(next);
+    if (nxt.isEmpty() || nxt.length() > 60) {
+      return false;
+    }
+    if (nxt.contains("?") || nxt.contains("!")) {
+      return false;
+    }
+    if (boundary(nxt) || majorStageTransition(nxt)) {
+      return false;
+    }
+    if (StageDetector.endsLikeWrappedLine(acc)) {
+      return true;
+    }
+    return (
+      StageDetector.startsLikeWrappedContinuation(nxt) &&
+      !acc.matches(RegexTerms.ENDS_WITH_SENTENCE)
+    );
   }
 
   private static EmbeddedResult applyEmbedded(
@@ -506,9 +685,37 @@ public class SpeakerBlockBuilder {
     }
 
     String lower = cleaned.toLowerCase();
-    return (
+    if (
       safeDialogue(cleaned) || lower.startsWith("-") || lower.startsWith("—")
-    );
+    ) {
+      return true;
+    }
+
+    return shortColumnFragment(cleaned);
+  }
+
+  private static boolean shortColumnFragment(String line) {
+    String cleaned = TextNormalizer.norm(line);
+    if (cleaned.isEmpty() || cleaned.length() > 45) {
+      return false;
+    }
+    if (cleaned.contains("?") || cleaned.contains("!")) {
+      return false;
+    }
+    if (boundary(cleaned) || majorStageTransition(cleaned)) {
+      return false;
+    }
+    if (standaloneStage(cleaned) || sourceOnlyBeat(cleaned)) {
+      return false;
+    }
+    if (cueList(cleaned) || frontOrFurniture(cleaned)) {
+      return false;
+    }
+    if (SpeakerDetector.heading(cleaned, null)) {
+      return false;
+    }
+
+    return TextNormalizer.hasLetter(cleaned);
   }
 
   private static boolean standaloneStage(String line) {
@@ -586,9 +793,7 @@ public class SpeakerBlockBuilder {
     }
 
     String lower = cleaned.toLowerCase();
-    return lower.matches(
-      RegexTerms.SHORT_ACTION_BEAT
-    );
+    return lower.matches(RegexTerms.SHORT_ACTION_BEAT);
   }
 
   private static boolean stageHeavy(String line) {
@@ -600,14 +805,8 @@ public class SpeakerBlockBuilder {
     }
 
     String lower = cleaned.toLowerCase();
-    int subjects = countMatches(
-      lower,
-      RegexTerms.STAGE_HEAVY_SUBJECT
-    );
-    int actions = countMatches(
-      lower,
-      RegexTerms.STAGE_HEAVY_ACTION
-    );
+    int subjects = countMatches(lower, RegexTerms.STAGE_HEAVY_SUBJECT);
+    int actions = countMatches(lower, RegexTerms.STAGE_HEAVY_ACTION);
 
     return subjects >= 2 && actions >= 2;
   }
@@ -635,12 +834,8 @@ public class SpeakerBlockBuilder {
       cleaned.contains("?") ||
       cleaned.contains("!") ||
       cleaned.matches(RegexTerms.STARTS_WITH_QUOTE) ||
-      lower.matches(
-        RegexTerms.DIALOGUE_CONJUNCTION_PRONOUN
-      ) ||
-      lower.matches(
-        RegexTerms.DIALOGUE_PRONOUN
-      )
+      lower.matches(RegexTerms.DIALOGUE_CONJUNCTION_PRONOUN) ||
+      lower.matches(RegexTerms.DIALOGUE_PRONOUN)
     );
   }
 
@@ -662,9 +857,7 @@ public class SpeakerBlockBuilder {
 
     return (
       cleaned.matches(RegexTerms.CUE_INITIAL_DOT) ||
-      cleaned.matches(
-        RegexTerms.CUE_DASH_PATTERN
-      ) ||
+      cleaned.matches(RegexTerms.CUE_DASH_PATTERN) ||
       (cleaned.matches(RegexTerms.CONTAINS_NUMBER_RUN) &&
         cleaned.matches(RegexTerms.CONTAINS_LETTER_WORD) &&
         !cleaned.matches(RegexTerms.LEADING_NUMBER_CAPS_LINE))
@@ -854,17 +1047,11 @@ public class SpeakerBlockBuilder {
         return true;
       }
 
-      if (
-        cleaned.matches(
-          RegexTerms.NARRATIVE_NUMBER
-        )
-      ) {
+      if (cleaned.matches(RegexTerms.NARRATIVE_NUMBER)) {
         return true;
       }
 
-      return cleaned.matches(
-        RegexTerms.NARRATIVE_TIME
-      );
+      return cleaned.matches(RegexTerms.NARRATIVE_TIME);
     }
   }
 

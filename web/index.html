@@ -32,6 +32,10 @@
           <input type="checkbox" name="timedMode" value="true"></input>
           Timed mode
         </label>
+        <label>
+          <input type="checkbox" name="includeMusic" value="true"></input>
+          Include music (songs/lyrics) as lines
+        </label>
       </fieldset>
 
       <button type="submit">Upload</button>
@@ -71,6 +75,9 @@
         <summary>Show answer</summary>
         <p id="expected-line"></p>
       </details>
+      <hr>
+      <p class="finish-note">Done rehearsing? Delete this script and its extracted text from the server.</p>
+      <button type="button" id="finish-session">Finish &amp; delete script</button>
     </section>
     <script type="module" src="/src/main.js">
     </script>

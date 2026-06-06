@@ -128,27 +128,26 @@ public class ScriptLoader {
       return pdf(script);
     }
 
-    Path cacheFile = session.textPath();
-    Path metaFile = cacheFile.resolveSibling("extracted_text.meta");
+    Path metaFile = session.textCsv().resolveSibling("extracted_text.meta");
     String expectedMeta = meta(script, name);
 
-    String cached = readCache(cacheFile, metaFile, expectedMeta);
+    String cached = readCache(session, metaFile, expectedMeta);
     if (!cached.isEmpty()) {
       return cached;
     }
 
     String text = pdf(script);
-    writeCache(cacheFile, metaFile, expectedMeta, text);
+    writeCache(session, metaFile, expectedMeta, text);
     return text;
   }
 
   private static String readCache(
-    Path cacheFile,
+    ParserSessionStore session,
     Path metaFile,
     String expectedMeta
   ) {
     try {
-      if (!Files.exists(cacheFile) || !Files.exists(metaFile)) {
+      if (!Files.exists(session.textCsv()) || !Files.exists(metaFile)) {
         return "";
       }
 
@@ -160,8 +159,8 @@ public class ScriptLoader {
         return "";
       }
 
-      System.out.println("Using cached extracted text: " + cacheFile);
-      return normalize(Files.readString(cacheFile, StandardCharsets.UTF_8));
+      System.out.println("Using cached extracted text: " + session.textCsv());
+      return normalize(session.loadText());
     } catch (IOException e) {
       System.out.println("Could not read extracted text cache; rebuilding it.");
       return "";
@@ -169,7 +168,7 @@ public class ScriptLoader {
   }
 
   private static void writeCache(
-    Path cacheFile,
+    ParserSessionStore session,
     Path metaFile,
     String expectedMeta,
     String text
@@ -179,10 +178,9 @@ public class ScriptLoader {
     }
 
     try {
-      Files.createDirectories(cacheFile.getParent());
-      Files.writeString(cacheFile, text, StandardCharsets.UTF_8);
+      session.saveText(text);
       Files.writeString(metaFile, expectedMeta, StandardCharsets.UTF_8);
-      System.out.println("Saved extracted text cache: " + cacheFile);
+      System.out.println("Saved extracted text cache: " + session.textCsv());
     } catch (IOException e) {
       System.out.println(
         "Could not save extracted text cache: " + e.getMessage()

@@ -66,7 +66,8 @@ public class ScriptParser {
       SpeakerHeadingIndex.build(bodyLines, chars, aliases);
     List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
       bodyLines,
-      headingIndex
+      headingIndex,
+      chars
     );
     List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
 
