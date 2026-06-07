@@ -18,7 +18,10 @@ import { spawn } from "node:child_process";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "../..");
 const BACKEND_DIR = path.join(ROOT_DIR, "backend");
-const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, "web", ".data");
+const DATA_DIR =
+  process.env.DATA_DIR ||
+  process.env.RAILWAY_VOLUME_MOUNT_PATH ||
+  path.join(ROOT_DIR, "web", ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const SCRIPTS_FILE = path.join(DATA_DIR, "scripts.json");
 const METRICS_FILE = path.join(DATA_DIR, "metrics.json");
