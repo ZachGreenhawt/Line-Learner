@@ -1091,8 +1091,9 @@ function parserReportBody(issues) {
     const before = issue.before || {};
     const after = issue.after || {};
     const value = values[i];
-    const note = cleanText(issue.noteMask, 500);
+    const note = cleanText(issue.note, 500) || cleanText(issue.noteMask, 500);
     const expectedSpeaker = cleanText(after.expectedSpeakerMask, 80);
+    const raw = issue.unmasked?.allowed ? issue.unmasked : null;
     const missing = missingSignals(issue);
 
     lines.push(
@@ -1108,6 +1109,23 @@ function parserReportBody(issues) {
       `- Cue mask: \"${cleanText(b.cueMask, 160)}\" (${b.cueW || 0} words)`,
       `- Line mask: \"${cleanText(b.lineMask, 160)}\" (${b.lineW || 0} words)`,
       `- Formatting: ${cleanText(issue.formatting?.shape, 180) || "not captured"}`,
+    );
+
+    if (raw) {
+      lines.push(
+        "",
+        "Unmasked snippet",
+        "- User confirmed they have rights/permission to send this snippet for debugging.",
+        `- Speaker: ${cleanText(raw.speaker, 80) || "unknown"}`,
+        `- Cue: \"${cleanText(raw.cue, 300)}\"`,
+        `- Line: \"${cleanText(raw.line, 300)}\"`,
+      );
+      if (cleanText(raw.expectedSpeaker, 80)) {
+        lines.push(`- Correct speaker: ${cleanText(raw.expectedSpeaker, 80)}`);
+      }
+    }
+
+    lines.push(
       "",
       "User correction",
       `- Requested change: ${issueKind(issue)}`,
@@ -1132,7 +1150,10 @@ function parserReportBody(issues) {
     }
   });
 
-  lines.push("", "Privacy: script text is masked; use source line numbers and pattern keys for reproduction.");
+  lines.push(
+    "",
+    "Privacy: script text is masked unless the user explicitly allowed an unmasked debugging snippet.",
+  );
   lines.push("Your Script parser intelligence report");
   return lines.join("\n");
 }

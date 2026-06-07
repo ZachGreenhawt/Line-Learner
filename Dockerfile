@@ -17,8 +17,10 @@ RUN javac -encoding UTF-8 -cp "backend/lib/*" -d web/.bridge-build $(find backen
 WORKDIR /app/web
 RUN npm run build -- --configLoader runner
 
+WORKDIR /app
+
 ENV NODE_ENV=production
 
 EXPOSE 5174
 
-CMD ["npm", "run", "start"]
+CMD ["npm", "--prefix", "web", "run", "start"]
