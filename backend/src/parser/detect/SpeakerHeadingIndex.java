@@ -101,7 +101,11 @@ public class SpeakerHeadingIndex {
       return null;
     }
 
-    if (looksLikeStandaloneFurnitureHeading(line) && !knownBare(line, names)) {
+    if (
+      looksLikeStandaloneFurnitureHeading(line) &&
+      !knownBare(line, names) &&
+      !nearKnownBare(line, names)
+    ) {
       return null;
     }
 
@@ -119,6 +123,11 @@ public class SpeakerHeadingIndex {
       HeadingRecord exact = exactHeading(lineIndex, line, candidate, canonical);
       if (exact != null) {
         return exact;
+      }
+
+      HeadingRecord fuzzy = fuzzyHeading(lineIndex, line, candidate, canonical);
+      if (fuzzy != null) {
+        return fuzzy;
       }
 
       HeadingRecord parenthetical = parentheticalHeading(
@@ -158,6 +167,19 @@ public class SpeakerHeadingIndex {
   private static boolean knownBare(String line, List<String> names) {
     String name = TextNormalizer.cleanName(line);
     return !name.isEmpty() && names != null && names.contains(name);
+  }
+
+  private static boolean nearKnownBare(String line, List<String> names) {
+    if (names == null || names.isEmpty() || !simpleHeadingWord(line)) {
+      return false;
+    }
+
+    for (String name : names) {
+      if (simpleName(name) && closeHeading(line, name)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static HeadingRecord slashHeading(
@@ -470,6 +492,148 @@ public class SpeakerHeadingIndex {
       true,
       false
     );
+  }
+
+  private static HeadingRecord fuzzyHeading(
+    int lineIndex,
+    String line,
+    String alias,
+    String canonical
+  ) {
+    String cleanAlias = TextNormalizer.cleanName(alias);
+    if (!simpleName(cleanAlias)) {
+      return null;
+    }
+
+    String normalized = TextNormalizer.norm(line);
+    int cut = firstHeadingPunctuationIndex(normalized);
+    String head = cut >= 0 ? normalized.substring(0, cut).trim() : normalized;
+    String remaining = cut >= 0 ? normalized.substring(cut + 1).trim() : "";
+    boolean missingPunctuation = false;
+
+    if (cut < 0) {
+      int space = normalized.indexOf(' ');
+      if (space > 0) {
+        head = normalized.substring(0, space).trim();
+        remaining = normalized.substring(space + 1).trim();
+        missingPunctuation = true;
+      }
+    }
+
+    if (!simpleHeadingWord(head) || !closeHeading(head, cleanAlias)) {
+      return null;
+    }
+
+    remaining = cleanRemainingAfterHeading(remaining);
+    if (!remaining.isEmpty() && looksLikeStageOnlyContinuation(remaining)) {
+      remaining = "";
+    }
+    if (!remaining.isEmpty() && !looksLikeDialogueRemainder(remaining)) {
+      return null;
+    }
+    if (missingPunctuation && !remaining.isEmpty() && !SpeakerDetector.bareTurn(remaining)) {
+      return null;
+    }
+
+    return new HeadingRecord(
+      lineIndex,
+      line,
+      alias,
+      canonical,
+      remaining,
+      HeadingConfidence.MEDIUM,
+      !remaining.isEmpty(),
+      false
+    );
+  }
+
+  private static boolean simpleName(String name) {
+    String clean = TextNormalizer.cleanName(name);
+    return (
+      clean.length() >= 4 &&
+      clean.length() <= 14 &&
+      !clean.contains(" ") &&
+      !clean.contains("/")
+    );
+  }
+
+  private static boolean simpleHeadingWord(String text) {
+    String clean = TextNormalizer.cleanName(text);
+    if (!simpleName(clean)) {
+      return false;
+    }
+
+    int letters = 0;
+    int caps = 0;
+    for (int i = 0; i < text.length(); i++) {
+      char ch = text.charAt(i);
+      if (Character.isLetter(ch)) {
+        letters++;
+        if (Character.isUpperCase(ch)) {
+          caps++;
+        }
+      } else if (!Character.isDigit(ch) && ch != '\'' && ch != '’') {
+        return false;
+      }
+    }
+
+    return letters > 0 && caps * 10 >= letters * 8;
+  }
+
+  private static boolean closeHeading(String raw, String alias) {
+    String left = foldOcr(TextNormalizer.cleanName(raw));
+    String right = foldOcr(TextNormalizer.cleanName(alias));
+    if (left.equals(right)) {
+      String cleanRaw = TextNormalizer.cleanName(raw);
+      String cleanAlias = TextNormalizer.cleanName(alias);
+      return !cleanRaw.equals(cleanAlias);
+    }
+    if (Math.abs(left.length() - right.length()) > 1) {
+      return false;
+    }
+    return editDistanceAtMostOne(left, right);
+  }
+
+  private static String foldOcr(String text) {
+    return text
+      .replace('0', 'O')
+      .replace('1', 'I')
+      .replace('5', 'S')
+      .replace('8', 'B');
+  }
+
+  private static boolean editDistanceAtMostOne(String left, String right) {
+    if (left.equals(right)) {
+      return true;
+    }
+
+    int i = 0;
+    int j = 0;
+    int edits = 0;
+
+    while (i < left.length() && j < right.length()) {
+      if (left.charAt(i) == right.charAt(j)) {
+        i++;
+        j++;
+        continue;
+      }
+
+      edits++;
+      if (edits > 1) {
+        return false;
+      }
+
+      if (left.length() > right.length()) {
+        i++;
+      } else if (right.length() > left.length()) {
+        j++;
+      } else {
+        i++;
+        j++;
+      }
+    }
+
+    return edits + (left.length() - i) + (right.length() - j) <= 1;
   }
 
   private static String cleanRemainingAfterHeading(String remaining) {

@@ -695,6 +695,8 @@ const FEEDBACK_IMPACT_TO =
   process.env.FEEDBACK_IMPACT_TO || "impact@yourscript.app";
 const FEEDBACK_DEBUG_TO =
   process.env.FEEDBACK_DEBUG_TO || "debug@yourscript.app";
+const PARSER_ISSUES_FROM = process.env.PARSER_ISSUES_FROM || FEEDBACK_FROM;
+const PARSER_ISSUES_TO = process.env.PARSER_ISSUES_TO || FEEDBACK_DEBUG_TO;
 
 function cleanText(value, max = 8000) {
   if (typeof value !== "string") return "";
@@ -766,6 +768,13 @@ function feedbackBody(body, kind) {
   return lines.join("\n");
 }
 
+function resendMessage(status) {
+  if (status === 401) return "Resend API key is invalid.";
+  if (status === 403) return "Resend rejected the sender or domain settings.";
+  if (status === 422) return "Resend rejected the email settings.";
+  return "Feedback could not be sent right now.";
+}
+
 function safeErrorLabel(error) {
   if (!error) return "unknown";
   if (typeof error.statusCode === "number")
@@ -780,6 +789,7 @@ async function sendEmail({ to, from, subject, text, replyTo = "" }) {
   if (!RESEND_API_KEY) {
     const error = new Error("Email send failed.");
     error.code = "missing_resend_key";
+    error.publicMessage = "RESEND_API_KEY is not configured.";
     throw error;
   }
 
@@ -807,11 +817,74 @@ async function sendEmail({ to, from, subject, text, replyTo = "" }) {
   if (!response.ok) {
     const error = new Error("Email send failed.");
     error.statusCode = response.status;
+    error.publicMessage = resendMessage(response.status);
     throw error;
   }
 
   return response.json().catch(() => ({}));
 }
+
+
+function parserReportBody(issues) {
+  const first = issues[0] || {};
+  const run = first.parseRun || {};
+  const s = first.settings || {};
+  const onoff = (value) => (value ? "on" : "off");
+  const lines = [
+    `Parser problems flagged in one practice session: ${issues.length} note(s).`,
+    "",
+    "RUN",
+    `  source lines: ~${run.sourceLines || 0}`,
+    `  practice lines: ${run.practiceLines || 0} across ${run.turns || 0} turns`,
+    `  body start line: ${run.bodyStartLine || "?"}`,
+    `  settings: stage-in-cue ${onoff(s.includeStageDirectionsInCue)} · case ${onoff(s.caseSensitive)} · punctuation ${onoff(s.punctuation)} · timed ${onoff(s.timedMode)} · music ${onoff(s.includeMusicAsLines)}`,
+    `  parser version: ${cleanText(first.parserVersion, 40) || "web-client"}`,
+    "",
+    "ISSUES (masked, IP-safe)",
+  ];
+
+  issues.forEach((issue, i) => {
+    const b = issue.block || {};
+    const ctx = issue.context || {};
+    lines.push(
+      `  ${i + 1}) ${cleanText(issue.kind, 40) || "note"} · line ${b.index || ctx.line || "?"} · ${cleanText(ctx.round, 40) || "run"}`,
+      `     cue  "${cleanText(b.cueMask, 120)}" (${b.cueW || 0} words)`,
+      `     line "${cleanText(b.lineMask, 120)}" (${b.lineW || 0} words)`,
+    );
+    const note = cleanText(issue.noteMask, 500);
+    if (note) lines.push(`     note: ${note}`);
+    const shape = cleanText(issue.formatting?.shape, 160);
+    if (shape) lines.push(`     shape: ${shape}`);
+  });
+
+  lines.push("", "— Your Script (per-session parser report)");
+  return lines.join("\n");
+}
+
+app.post("/api/parser-report", async (req, res) => {
+  const issues = Array.isArray(req.body?.issues) ? req.body.issues.slice(0, 50) : [];
+  if (!issues.length) {
+    return res.status(400).json({ ok: false, error: "No parser issues to report." });
+  }
+
+  try {
+    await sendEmail({
+      from: PARSER_ISSUES_FROM,
+      to: PARSER_ISSUES_TO,
+      subject: `[Your Script] Parser issues — ${issues.length} from one session`,
+      text: parserReportBody(issues),
+    });
+    res.json({ ok: true, recorded: issues.length });
+  } catch (error) {
+    console.error("[parser-report] send failed", {
+      reason: safeErrorLabel(error),
+    });
+    res.status(502).json({
+      ok: false,
+      error: error.publicMessage || "Couldn't send the parser report right now.",
+    });
+  }
+});
 
 app.post("/api/feedback", async (req, res) => {
   const body = req.body || {};
