@@ -910,39 +910,230 @@ async function sendEmail({ to, from, subject, text, replyTo = "" }) {
 }
 
 
+const ISSUE_LABELS = {
+  wrong_speaker: "Wrong speaker",
+  stage_direction: "Stage direction issue",
+  dialogue: "Missed dialogue",
+  lyric: "Lyric issue",
+  music_cue: "Music cue issue",
+  split_block: "Needs split",
+  merge_block: "Needs merge",
+  exclude_line: "Should exclude",
+};
+
+function issueKind(issue) {
+  return cleanText(issue?.kind, 60) || "note";
+}
+
+function issueLabel(issue) {
+  const kind = issueKind(issue);
+  return ISSUE_LABELS[kind] || kind.replace(/_/g, " ");
+}
+
+function cueType(mask) {
+  const cue = cleanText(mask, 160);
+  if (!cue) return "missing cue";
+  if (cue.includes("STARTS THE SCENE")) return "scene-start cue";
+  if (cue.startsWith("UNKNOWN:")) return "unknown-speaker cue";
+  if (cue.startsWith("[REVIEW CUE")) return "review cue";
+  return "speaker cue";
+}
+
+function valueScore(issue) {
+  const kind = issueKind(issue);
+  let score = 20;
+  const reasons = [];
+
+  if (["wrong_speaker", "split_block", "merge_block"].includes(kind)) {
+    score += 35;
+    reasons.push("changes parser structure");
+  }
+  if (["lyric", "music_cue"].includes(kind)) {
+    score += 30;
+    reasons.push("musical-theatre classifier signal");
+  }
+  if (["stage_direction", "dialogue", "exclude_line"].includes(kind)) {
+    score += 25;
+    reasons.push("block classification signal");
+  }
+  if (cleanText(issue?.after?.expectedSpeakerMask, 80)) {
+    score += 20;
+    reasons.push("includes corrected speaker");
+  }
+  if (cleanText(issue?.formatting?.shape, 160)) {
+    score += 10;
+    reasons.push("includes formatting shape");
+  }
+
+  const label =
+    score >= 75 ? "very high" : score >= 55 ? "high" : score >= 35 ? "medium" : "low";
+  return { score, label, reasons };
+}
+
+function likelyCauses(issue) {
+  const kind = issueKind(issue);
+  const b = issue.block || {};
+  const type = cueType(b.cueMask);
+  const causes = [];
+
+  if (kind === "wrong_speaker") {
+    causes.push("SpeakerHeadingIndex may have missed or misread a nearby heading.");
+    causes.push("SpeakerBlockBuilder may have carried dialogue into the previous speaker block.");
+    causes.push("CuePairBuilder may have paired the target line with the wrong previous turn.");
+    if (type === "scene-start cue") {
+      causes.push("Scene-start cue means no previous non-target cue was found before this target line.");
+    }
+  } else if (kind === "stage_direction") {
+    causes.push("StageDetector or source-only block rules likely classified spoken text as action.");
+    causes.push("Check parenthetical, indentation, and action-verb rules around this block.");
+  } else if (kind === "dialogue") {
+    causes.push("Dialogue may have been dropped as stage/source-only text or page furniture.");
+    causes.push("Check line continuation and bare-turn detection around this block.");
+  } else if (kind === "lyric") {
+    causes.push("MusicDetector may have missed lyric shape, song boundary, or ensemble context.");
+  } else if (kind === "music_cue") {
+    causes.push("Music cue may have been treated as stage direction or dialogue.");
+  } else if (kind === "split_block") {
+    causes.push("A speaker change or stage boundary may be embedded inside one parsed block.");
+  } else if (kind === "merge_block") {
+    causes.push("A wrapped dialogue line may have been split into separate blocks.");
+  } else if (kind === "exclude_line") {
+    causes.push("Page furniture, running header, or cleanup removal may not have matched this line.");
+  }
+
+  return causes;
+}
+
+function missingSignals(issue) {
+  const missing = [];
+  const kind = issueKind(issue);
+
+  if (kind === "wrong_speaker" && !cleanText(issue?.after?.expectedSpeakerMask, 80)) {
+    missing.push("correct speaker");
+  }
+  if (!cleanText(issue?.before?.classification, 80)) {
+    missing.push("parser block classification");
+  }
+  if (!cleanText(issue?.before?.confidence, 80)) {
+    missing.push("parser confidence");
+  }
+  if (!cleanText(issue?.before?.rules, 240)) {
+    missing.push("rules triggered/rejected");
+  }
+  if (!issue?.neighbors) {
+    missing.push("previous/next parsed blocks");
+  }
+  if (!issue?.formatting?.indent && !issue?.formatting?.shape) {
+    missing.push("formatting pattern");
+  }
+
+  return missing;
+}
+
+function patternKey(issue) {
+  const kind = issueKind(issue);
+  const b = issue.block || {};
+  const shape = cleanText(issue.formatting?.shape, 120) || "shape_unknown";
+  const cue = cueType(b.cueMask).replace(/\s+/g, "_");
+  const music = issue.settings?.includeMusicAsLines ? "music_on" : "music_off";
+  return [kind, cue, shape, music].join(" | ");
+}
+
+function settingsLine(settings = {}) {
+  const onoff = (value) => (value ? "on" : "off");
+  return [
+    `stage-in-cue ${onoff(settings.includeStageDirectionsInCue)}`,
+    `case ${onoff(settings.caseSensitive)}`,
+    `punctuation ${onoff(settings.punctuation)}`,
+    `timed ${onoff(settings.timedMode)}`,
+    `music ${onoff(settings.includeMusicAsLines)}`,
+  ].join(", ");
+}
+
 function parserReportBody(issues) {
   const first = issues[0] || {};
   const run = first.parseRun || {};
-  const s = first.settings || {};
-  const onoff = (value) => (value ? "on" : "off");
+  const values = issues.map(valueScore);
+  const top = values.reduce(
+    (best, value) => (value.score > best.score ? value : best),
+    { score: 0, label: "low", reasons: [] },
+  );
+  const kindCounts = {};
+
+  for (const issue of issues) {
+    const kind = issueKind(issue);
+    kindCounts[kind] = (kindCounts[kind] || 0) + 1;
+  }
+
   const lines = [
-    `Parser problems flagged in one practice session: ${issues.length} note(s).`,
+    `Parser correction report: ${issues.length} issue(s)`,
     "",
-    "RUN",
-    `  source lines: ~${run.sourceLines || 0}`,
-    `  practice lines: ${run.practiceLines || 0} across ${run.turns || 0} turns`,
-    `  body start line: ${run.bodyStartLine || "?"}`,
-    `  settings: stage-in-cue ${onoff(s.includeStageDirectionsInCue)} · case ${onoff(s.caseSensitive)} · punctuation ${onoff(s.punctuation)} · timed ${onoff(s.timedMode)} · music ${onoff(s.includeMusicAsLines)}`,
-    `  parser version: ${cleanText(first.parserVersion, 40) || "web-client"}`,
+    "SESSION",
+    `- Priority: ${top.label} (${top.score})`,
+    `- Main failure types: ${Object.entries(kindCounts)
+      .map(([kind, count]) => `${kind} x${count}`)
+      .join(", ")}`,
+    `- Input: ${cleanText(run.input?.kind, 80) || "unknown"} (~${cleanText(String(run.input?.sizeKB || "?"), 20)} KB)`,
+    `- Run: ${run.practiceLines || 0} practice lines, ${run.turns || 0} turns, ~${run.sourceLines || 0} source lines`,
+    `- Body start line: ${run.bodyStartLine || "?"}`,
+    `- Settings: ${settingsLine(first.settings || {})}`,
+    `- Parser version: ${cleanText(first.parserVersion, 40) || "web-client"}`,
     "",
-    "ISSUES (masked, IP-safe)",
+    "WHY THIS IS USEFUL",
+    "- Treat each issue as parser output vs user correction.",
+    "- Use the pattern key to group repeated failures across sessions.",
+    "- Missing signals below are the next fields to add if this report is not enough.",
   ];
 
   issues.forEach((issue, i) => {
     const b = issue.block || {};
     const ctx = issue.context || {};
-    lines.push(
-      `  ${i + 1}) ${cleanText(issue.kind, 40) || "note"} · line ${b.index || ctx.line || "?"} · ${cleanText(ctx.round, 40) || "run"}`,
-      `     cue  "${cleanText(b.cueMask, 120)}" (${b.cueW || 0} words)`,
-      `     line "${cleanText(b.lineMask, 120)}" (${b.lineW || 0} words)`,
-    );
+    const before = issue.before || {};
+    const after = issue.after || {};
+    const value = values[i];
     const note = cleanText(issue.noteMask, 500);
-    if (note) lines.push(`     note: ${note}`);
-    const shape = cleanText(issue.formatting?.shape, 160);
-    if (shape) lines.push(`     shape: ${shape}`);
+    const expectedSpeaker = cleanText(after.expectedSpeakerMask, 80);
+    const missing = missingSignals(issue);
+
+    lines.push(
+      "",
+      `ISSUE ${i + 1}: ${issueLabel(issue)} (${value.label}, ${value.score})`,
+      `- Location: practice line ${b.index || ctx.line || "?"}, ${cleanText(ctx.round, 40) || "run"}, ${cleanText(ctx.mode, 40) || "mode unknown"}`,
+      `- Pattern key: ${patternKey(issue)}`,
+      "",
+      "Parser output",
+      `- Classification: ${cleanText(before.classification, 80) || "practice_pair"}`,
+      `- Speaker shown/assigned: ${cleanText(before.speaker || b.characterMask, 80) || "unknown"}`,
+      `- Cue type: ${cueType(b.cueMask)}`,
+      `- Cue mask: \"${cleanText(b.cueMask, 160)}\" (${b.cueW || 0} words)`,
+      `- Line mask: \"${cleanText(b.lineMask, 160)}\" (${b.lineW || 0} words)`,
+      `- Formatting: ${cleanText(issue.formatting?.shape, 180) || "not captured"}`,
+      "",
+      "User correction",
+      `- Requested change: ${issueKind(issue)}`,
+      `- Correct speaker: ${expectedSpeaker || "not provided"}`,
+      `- Note: ${note || "none"}`,
+      "",
+      "Likely parser areas to inspect",
+      ...likelyCauses(issue).map((cause) => `- ${cause}`),
+      "",
+      "Next debug steps",
+      `- Reproduce with body start line ${run.bodyStartLine || "?"} and settings above.`,
+      "- Inspect the affected turn plus the previous and next parsed turns.",
+      "- Check whether source cleanup, page furniture, OCR heading recovery, or music detection changed this block.",
+      "- If repeated, add a small edgecase file matching the pattern key.",
+    );
+
+    if (value.reasons.length) {
+      lines.push("", "Value reasons", ...value.reasons.map((reason) => `- ${reason}`));
+    }
+    if (missing.length) {
+      lines.push("", "Missing high-value data", ...missing.map((item) => `- ${item}`));
+    }
   });
 
-  lines.push("", "— Your Script (per-session parser report)");
+  lines.push("", "Privacy: script text is masked; use source line numbers and pattern keys for reproduction.");
+  lines.push("Your Script parser intelligence report");
   return lines.join("\n");
 }
 
