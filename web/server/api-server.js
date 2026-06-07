@@ -29,6 +29,7 @@ const PARSER_SESSIONS_DIR = path.join(DATA_DIR, "parser_sessions");
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 60 * 60 * 1000;
 const PORT = Number(process.env.PORT || process.env.API_PORT || 5174);
 const HOST = process.env.HOST || "0.0.0.0";
+const METRICS_TIME_ZONE = metricsTimeZone();
 const CORS_ORIGINS = (process.env.CORS_ORIGIN || "*")
   .split(",")
   .map((origin) => origin.trim())
@@ -158,6 +159,7 @@ function emptyMetrics() {
     updatedAt: "",
     counts: {},
     days: {},
+    dailyEmails: {},
   };
 }
 
@@ -171,6 +173,10 @@ function mergeMetrics(saved) {
       : {},
     days:
       saved && typeof saved.days === "object" && saved.days ? saved.days : {},
+    dailyEmails:
+      saved && typeof saved.dailyEmails === "object" && saved.dailyEmails ?
+        saved.dailyEmails
+      : {},
   };
 }
 
@@ -190,6 +196,102 @@ async function readMetrics() {
 
 let metrics = await readMetrics();
 let metricsWrite = Promise.resolve();
+
+function validTimeZone(zone) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function metricsTimeZone() {
+  const zone = (process.env.METRICS_TIME_ZONE || process.env.TZ || "").trim();
+  if (zone && validTimeZone(zone)) {
+    return zone;
+  }
+
+  if (zone) {
+    console.warn("[metrics] invalid timezone env value, using server timezone", {
+      zone,
+    });
+  }
+
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function zonedParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: METRICS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const out = {};
+
+  for (const part of parts) {
+    if (part.type !== "literal") {
+      out[part.type] = Number(part.value);
+    }
+  }
+
+  return out;
+}
+
+function localDayKey(date = new Date()) {
+  const parts = zonedParts(date);
+  return [
+    parts.year,
+    String(parts.month).padStart(2, "0"),
+    String(parts.day).padStart(2, "0"),
+  ].join("-");
+}
+
+function shiftDay(day, amount) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date + amount))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function zoneOffsetMs(date) {
+  const parts = zonedParts(date);
+  const asUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+  return asUtc - date.getTime();
+}
+
+function zonedTimeToUtcMs(day, hour, minute, second) {
+  const [year, month, date] = day.split("-").map(Number);
+  const local = Date.UTC(year, month - 1, date, hour, minute, second);
+  let utc = local - zoneOffsetMs(new Date(local));
+  utc = local - zoneOffsetMs(new Date(utc));
+  return utc;
+}
+
+function nextMetricsSendDelay() {
+  const now = Date.now();
+  let day = localDayKey(new Date(now));
+  let target = zonedTimeToUtcMs(day, 23, 59, 59);
+
+  if (target <= now) {
+    day = shiftDay(day, 1);
+    target = zonedTimeToUtcMs(day, 23, 59, 59);
+  }
+
+  return Math.max(1_000, target - now);
+}
 
 function saveMetrics() {
   metricsWrite = metricsWrite
@@ -219,7 +321,7 @@ async function recordMetric(name, amount = 1) {
   }
 
   const count = Number.isFinite(amount) ? amount : 1;
-  const day = new Date().toISOString().slice(0, 10);
+  const day = localDayKey();
   metrics.updatedAt = new Date().toISOString();
   metrics.counts[key] = (metrics.counts[key] || 0) + count;
   metrics.days[day] = metrics.days[day] || {};
@@ -782,6 +884,8 @@ const FEEDBACK_DEBUG_TO =
   process.env.FEEDBACK_DEBUG_TO || "debug@yourscript.app";
 const PARSER_ISSUES_FROM = process.env.PARSER_ISSUES_FROM || FEEDBACK_FROM;
 const PARSER_ISSUES_TO = process.env.PARSER_ISSUES_TO || FEEDBACK_DEBUG_TO;
+const METRICS_FROM = process.env.METRICS_FROM || FEEDBACK_FROM;
+const METRICS_TO = process.env.METRICS_TO || "metrics@yourscript.app";
 
 function cleanText(value, max = 8000) {
   if (typeof value !== "string") return "";
@@ -907,6 +1011,100 @@ async function sendEmail({ to, from, subject, text, replyTo = "" }) {
   }
 
   return response.json().catch(() => ({}));
+}
+
+function metricsLines(day) {
+  const counts = metrics.days?.[day] || {};
+  const entries = Object.entries(counts).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+
+  const lines = [
+    `Your Script daily metrics — ${day}`,
+    `Timezone: ${METRICS_TIME_ZONE}`,
+    "",
+  ];
+
+  if (!entries.length) {
+    lines.push("No events recorded.");
+  } else {
+    for (const [name, count] of entries) {
+      lines.push(`${name}: ${count}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "-- totals --",
+    `lifetime events: ${Object.values(metrics.counts || {}).reduce(
+      (sum, count) => sum + count,
+      0,
+    )}`,
+    `metrics file: ${METRICS_FILE}`,
+    `sent at: ${new Date().toISOString()}`,
+  );
+
+  return lines.join("\n");
+}
+
+async function sendDailyMetrics(day) {
+  if (!day || metrics.dailyEmails?.[day]) {
+    return false;
+  }
+
+  await sendEmail({
+    from: METRICS_FROM,
+    to: METRICS_TO,
+    subject: `[Your Script] Daily metrics — ${day}`,
+    text: metricsLines(day),
+  });
+
+  metrics.dailyEmails = metrics.dailyEmails || {};
+  metrics.dailyEmails[day] = new Date().toISOString();
+  metrics.updatedAt = new Date().toISOString();
+  await saveMetrics();
+  return true;
+}
+
+async function sendMissedMetricsDigest() {
+  const yesterday = shiftDay(localDayKey(), -1);
+  if (metrics.dailyEmails?.[yesterday]) {
+    return;
+  }
+
+  try {
+    const sent = await sendDailyMetrics(yesterday);
+    if (sent) {
+      console.log(`[metrics] sent catch-up daily email for ${yesterday}`);
+    }
+  } catch (error) {
+    console.error("[metrics] catch-up email failed", {
+      day: yesterday,
+      reason: safeErrorLabel(error),
+    });
+  }
+}
+
+function scheduleDailyMetricsEmail() {
+  const delay = nextMetricsSendDelay();
+  const timer = setTimeout(async () => {
+    const day = localDayKey();
+    try {
+      const sent = await sendDailyMetrics(day);
+      if (sent) {
+        console.log(`[metrics] sent daily email for ${day}`);
+      }
+    } catch (error) {
+      console.error("[metrics] daily email failed", {
+        day,
+        reason: safeErrorLabel(error),
+      });
+    } finally {
+      scheduleDailyMetricsEmail();
+    }
+  }, delay);
+
+  timer.unref();
 }
 
 
@@ -1247,9 +1445,13 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`Backend at ${BACKEND_DIR}`);
   console.log(`Uploads at ${UPLOAD_DIR}`);
   console.log(`Metrics at ${METRICS_FILE}`);
+  console.log(`Metrics timezone ${METRICS_TIME_ZONE}`);
 });
 
 cleanupExpiredSessions().catch(() => {});
+sendMissedMetricsDigest().catch(() => {});
+scheduleDailyMetricsEmail();
+
 const sweepTimer = setInterval(
   () => cleanupExpiredSessions().catch(() => {}),
   Math.min(SESSION_TTL_MS, 10 * 60 * 1000),
