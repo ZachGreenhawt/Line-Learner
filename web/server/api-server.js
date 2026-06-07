@@ -1013,11 +1013,27 @@ async function sendEmail({ to, from, subject, text, replyTo = "" }) {
   return response.json().catch(() => ({}));
 }
 
+function metricEntries(counts = {}) {
+  return Object.entries(counts)
+    .map(([name, count]) => [name, Number(count)])
+    .filter(([, count]) => Number.isFinite(count) && count !== 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
+function metricsTotal(entries) {
+  return entries.reduce((sum, [, count]) => sum + count, 0);
+}
+
+function metricDayKeys() {
+  return Object.keys(metrics.days || {})
+    .filter((day) => metricEntries(metrics.days[day]).length)
+    .sort();
+}
+
 function metricsLines(day) {
-  const counts = metrics.days?.[day] || {};
-  const entries = Object.entries(counts).sort(([left], [right]) =>
-    left.localeCompare(right),
-  );
+  const entries = metricEntries(metrics.days?.[day] || {});
+  const totalEntries = metricEntries(metrics.counts || {});
+  const days = metricDayKeys();
 
   const lines = [
     `Your Script daily metrics — ${day}`,
@@ -1026,7 +1042,13 @@ function metricsLines(day) {
   ];
 
   if (!entries.length) {
-    lines.push("No events recorded.");
+    lines.push(`No events recorded for ${day}.`);
+    if (days.length) {
+      lines.push(`Available day buckets: ${days.slice(-7).join(", ")}`);
+    }
+    if (totalEntries.length) {
+      lines.push("Lifetime totals still exist below.");
+    }
   } else {
     for (const [name, count] of entries) {
       lines.push(`${name}: ${count}`);
@@ -1035,11 +1057,16 @@ function metricsLines(day) {
 
   lines.push(
     "",
-    "-- totals --",
-    `lifetime events: ${Object.values(metrics.counts || {}).reduce(
-      (sum, count) => sum + count,
-      0,
-    )}`,
+    "-- lifetime totals --",
+    `lifetime events: ${metricsTotal(totalEntries)}`,
+  );
+
+  for (const [name, count] of totalEntries) {
+    lines.push(`${name}: ${count}`);
+  }
+
+  lines.push(
+    "",
     `metrics file: ${METRICS_FILE}`,
     `sent at: ${new Date().toISOString()}`,
   );
