@@ -18,9 +18,10 @@ import { spawn } from "node:child_process";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "../..");
 const BACKEND_DIR = path.join(ROOT_DIR, "backend");
-const DATA_DIR = path.join(ROOT_DIR, "web", ".data");
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT_DIR, "web", ".data");
 const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const SCRIPTS_FILE = path.join(DATA_DIR, "scripts.json");
+const METRICS_FILE = path.join(DATA_DIR, "metrics.json");
 const PARSER_SESSIONS_DIR = path.join(DATA_DIR, "parser_sessions");
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 60 * 60 * 1000;
 const PORT = Number(process.env.PORT || process.env.API_PORT || 5174);
@@ -146,6 +147,81 @@ async function readScripts() {
 async function writeScripts(scripts) {
   await mkdir(DATA_DIR, { recursive: true });
   await writeFile(SCRIPTS_FILE, JSON.stringify(scripts, null, 2));
+}
+
+function emptyMetrics() {
+  return {
+    startedAt: new Date().toISOString(),
+    updatedAt: "",
+    counts: {},
+    days: {},
+  };
+}
+
+function mergeMetrics(saved) {
+  return {
+    ...emptyMetrics(),
+    ...(saved && typeof saved === "object" ? saved : {}),
+    counts:
+      saved && typeof saved.counts === "object" && saved.counts ?
+        saved.counts
+      : {},
+    days:
+      saved && typeof saved.days === "object" && saved.days ? saved.days : {},
+  };
+}
+
+async function readMetrics() {
+  try {
+    return mergeMetrics(JSON.parse(await readFile(METRICS_FILE, "utf8")));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return emptyMetrics();
+    }
+    console.warn("[metrics] could not read saved metrics", {
+      reason: error.message,
+    });
+    return emptyMetrics();
+  }
+}
+
+let metrics = await readMetrics();
+let metricsWrite = Promise.resolve();
+
+function saveMetrics() {
+  metricsWrite = metricsWrite
+    .catch(() => {})
+    .then(async () => {
+      await mkdir(DATA_DIR, { recursive: true });
+      await writeFile(METRICS_FILE, JSON.stringify(metrics, null, 2));
+    });
+
+  metricsWrite.catch((error) => {
+    console.error("[metrics] could not save metrics", {
+      reason: error.message,
+    });
+  });
+
+  return metricsWrite;
+}
+
+async function recordMetric(name, amount = 1) {
+  const key = String(name || "")
+    .trim()
+    .replace(/[^A-Za-z0-9_.:-]/g, "_")
+    .slice(0, 80);
+
+  if (!key) {
+    return;
+  }
+
+  const count = Number.isFinite(amount) ? amount : 1;
+  const day = new Date().toISOString().slice(0, 10);
+  metrics.updatedAt = new Date().toISOString();
+  metrics.counts[key] = (metrics.counts[key] || 0) + count;
+  metrics.days[day] = metrics.days[day] || {};
+  metrics.days[day][key] = (metrics.days[day][key] || 0) + count;
+  await saveMetrics();
 }
 
 async function saveScript(script) {
@@ -455,6 +531,7 @@ async function analyzeFile(file, body) {
   );
 
   await saveScript(script);
+  await recordMetric(cached ? "cached_script_used" : "script_uploaded");
 
   return {
     ok: true,
@@ -647,6 +724,10 @@ app.post("/api/parse", async (req, res) => {
     );
 
     await touchScript(script.scriptId);
+    await recordMetric("script_parsed");
+    if (parsed.total) {
+      await recordMetric("practice_lines_created", Number(parsed.total));
+    }
 
     res.json({
       ...parsed,
@@ -678,6 +759,7 @@ app.post(
 
     try {
       await deleteSession(scriptId);
+      await recordMetric("session_ended");
       res.json({ ok: true });
     } catch (error) {
       res.status(500).json({
@@ -874,6 +956,8 @@ app.post("/api/parser-report", async (req, res) => {
       subject: `[Your Script] Parser issues — ${issues.length} from one session`,
       text: parserReportBody(issues),
     });
+    await recordMetric("parser_report_sent");
+    await recordMetric("parser_issues_reported", issues.length);
     res.json({ ok: true, recorded: issues.length });
   } catch (error) {
     console.error("[parser-report] send failed", {
@@ -915,6 +999,7 @@ app.post("/api/feedback", async (req, res) => {
       replyTo: senderEmail,
     });
 
+    await recordMetric(`feedback_${kind}`);
     res.json({ ok: true });
   } catch (error) {
     console.error("[feedback] send failed", {
@@ -928,7 +1013,10 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
-app.post("/api/event", (req, res) => {
+app.post("/api/event", async (req, res) => {
+  try {
+    await recordMetric(req.body?.event || "event");
+  } catch {}
   res.sendStatus(204);
 });
 
@@ -943,6 +1031,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log(`API running at http://${HOST}:${PORT}`);
   console.log(`Backend at ${BACKEND_DIR}`);
   console.log(`Uploads at ${UPLOAD_DIR}`);
+  console.log(`Metrics at ${METRICS_FILE}`);
 });
 
 cleanupExpiredSessions().catch(() => {});
@@ -952,5 +1041,12 @@ const sweepTimer = setInterval(
 );
 sweepTimer.unref();
 
-process.on("SIGTERM", () => server.close());
-process.on("SIGINT", () => server.close());
+async function shutdown() {
+  try {
+    await saveMetrics();
+  } catch {}
+  server.close();
+}
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
