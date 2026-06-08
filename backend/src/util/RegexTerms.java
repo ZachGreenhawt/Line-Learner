@@ -295,7 +295,7 @@ public final class RegexTerms {
 
   // SpeakerDetector
 
-  public static final String TRAILING_DOT_COLON = "[.:]+$";
+  public static final String TRAILING_DOT_COLON = "[.:,]+$";
   public static final String CONTAINS_SENTENCE_PUNCT = ".*[?!;].*";
   public static final String SPEAKER_NAME_SHAPE =
     "[A-Za-z][A-Za-z0-9 .'’\\-/]*";

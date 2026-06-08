@@ -905,6 +905,11 @@ public class CharacterExtractor {
         result.add(noDots);
       }
 
+      String last = lastName(name);
+      if (!last.isEmpty()) {
+        result.add(last);
+      }
+
       String[] slashParts = name.split(RegexTerms.WHITESPACE_AROUND_SLASH);
       if (slashParts.length > 1) {
         for (String part : slashParts) {
@@ -917,6 +922,18 @@ public class CharacterExtractor {
     }
 
     return result;
+  }
+
+  private static String lastName(String name) {
+    String[] words = TextNormalizer.cleanName(name).split(
+      RegexTerms.WHITESPACE
+    );
+    if (words.length < 2) {
+      return "";
+    }
+
+    String last = words[words.length - 1];
+    return validNameShape(last) ? last : "";
   }
 
   public static List<String> sort(Set<String> names) {

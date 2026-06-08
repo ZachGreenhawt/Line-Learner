@@ -58,7 +58,7 @@ public class SpeakerDetector {
     }
 
     char next = line.charAt(speaker.length());
-    if (next == ':' || next == '.') {
+    if (headingPunctuation(next)) {
       return true;
     }
     if (!Character.isWhitespace(next) && next != '(' && next != '[') {
@@ -78,8 +78,7 @@ public class SpeakerDetector {
       String stripped = TextNormalizer.stripLeadingParentheticals(rest);
       return (
         stripped.isEmpty() ||
-        stripped.startsWith(":") ||
-        stripped.startsWith(".")
+        startsWithHeadingPunctuation(stripped)
       );
     }
 
@@ -153,19 +152,17 @@ public class SpeakerDetector {
       String stripped = TextNormalizer.stripLeadingParentheticals(rest);
       if (
         !stripped.isEmpty() &&
-        (stripped.startsWith(":") ||
-          stripped.startsWith(".") ||
-          bareTurn(stripped))
+        (startsWithHeadingPunctuation(stripped) || bareTurn(stripped))
       ) {
         rest = stripped;
       }
     }
 
     if (start > 0) {
-      return rest.startsWith(":") || rest.startsWith(".");
+      return startsWithHeadingPunctuation(rest);
     }
 
-    if (rest.isEmpty() || rest.startsWith(":") || rest.startsWith(".")) {
+    if (rest.isEmpty() || startsWithHeadingPunctuation(rest)) {
       return true;
     }
 
@@ -516,13 +513,13 @@ public class SpeakerDetector {
       }
     }
 
-    if (rest.startsWith(":") || rest.startsWith(".")) {
-      return TextNormalizer.norm(rest.substring(1));
+    if (startsWithHeadingPunctuation(rest)) {
+      return stripHeadingPunctuation(rest);
     }
 
     rest = TextNormalizer.stripLeadingParentheticals(rest);
-    if (rest.startsWith(":") || rest.startsWith(".")) {
-      return TextNormalizer.norm(rest.substring(1));
+    if (startsWithHeadingPunctuation(rest)) {
+      return stripHeadingPunctuation(rest);
     }
 
     return "";
@@ -560,8 +557,8 @@ public class SpeakerDetector {
     String rest = TextNormalizer.norm(line.substring(rawSpeaker.length()));
     rest = TextNormalizer.stripLeadingParentheticals(rest);
 
-    if (rest.startsWith(":") || rest.startsWith(".")) {
-      rest = TextNormalizer.norm(rest.substring(1));
+    if (startsWithHeadingPunctuation(rest)) {
+      rest = stripHeadingPunctuation(rest);
     }
 
     return rest;
@@ -575,8 +572,8 @@ public class SpeakerDetector {
       return "";
     }
 
-    if (rest.startsWith(":") || rest.startsWith(".")) {
-      return TextNormalizer.norm(rest.substring(1));
+    if (startsWithHeadingPunctuation(rest)) {
+      return stripHeadingPunctuation(rest);
     }
 
     return bareTurn(rest) ? rest : "";
@@ -672,6 +669,7 @@ public class SpeakerDetector {
       Character.isWhitespace(next) ||
       next == ':' ||
       next == '.' ||
+      next == ',' ||
       next == '(' ||
       next == '[' ||
       next == '/'
@@ -729,6 +727,27 @@ public class SpeakerDetector {
       (line.length() > end &&
         (line.charAt(end) == '(' || line.charAt(end) == '['))
     );
+  }
+
+  private static boolean startsWithHeadingPunctuation(String text) {
+    String cleaned = TextNormalizer.norm(text);
+    return (
+      cleaned.startsWith(":") ||
+      cleaned.startsWith(".") ||
+      cleaned.startsWith(",")
+    );
+  }
+
+  private static String stripHeadingPunctuation(String text) {
+    String cleaned = TextNormalizer.norm(text);
+    while (!cleaned.isEmpty() && headingPunctuation(cleaned.charAt(0))) {
+      cleaned = TextNormalizer.norm(cleaned.substring(1));
+    }
+    return cleaned;
+  }
+
+  private static boolean headingPunctuation(char ch) {
+    return ch == ':' || ch == '.' || ch == ',';
   }
 
   public static boolean allCapsAt(String line, int start, String name) {

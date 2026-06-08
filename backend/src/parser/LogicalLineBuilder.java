@@ -26,6 +26,10 @@ public class LogicalLineBuilder {
       }
 
       if (SpeakerDetector.heading(line, chars)) {
+        if (hasEmbeddedTurnAfterStart(line, chars)) {
+          out.addAll(explodeEmbeddedTurns(line, chars));
+          continue;
+        }
         out.add(line);
         continue;
       }
@@ -247,7 +251,7 @@ public class LogicalLineBuilder {
       SpeakerDetector.heading(line, chars) ||
       !SpeakerDetector.name(line, chars).isEmpty()
     ) {
-      return true;
+      return !hasEmbeddedTurnAfterStart(line, chars);
     }
 
     return (
@@ -256,6 +260,13 @@ public class LogicalLineBuilder {
       StageDetector.strong(line, chars) ||
       looksLikeStandaloneStageDirection(line)
     );
+  }
+
+  private static boolean hasEmbeddedTurnAfterStart(
+    String line,
+    Set<String> chars
+  ) {
+    return SpeakerDetector.inside(line, 1, chars) > 0;
   }
 
   private static boolean looksLikeStandaloneStageDirection(String line) {

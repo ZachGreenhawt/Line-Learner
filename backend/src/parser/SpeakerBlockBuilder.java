@@ -51,7 +51,14 @@ public class SpeakerBlockBuilder {
 
       SpeakerHeadingIndex.HeadingRecord heading = headingAt(headings, i);
       if (heading != null) {
-        Built built = speakerBlock(lines, headings, knownSpeakers, i, heading);
+        Built built = speakerBlock(
+          lines,
+          headings,
+          knownSpeakers,
+          i,
+          heading,
+          lastSpeaker
+        );
 
         if (hasText(built.block)) {
           blocks.add(built.block);
@@ -219,7 +226,8 @@ public class SpeakerBlockBuilder {
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings,
     Set<String> knownSpeakers,
     int start,
-    SpeakerHeadingIndex.HeadingRecord heading
+    SpeakerHeadingIndex.HeadingRecord heading,
+    String previousSpeaker
   ) {
     StringBuilder text = new StringBuilder();
     StringBuilder source = new StringBuilder(lines.get(start));
@@ -243,7 +251,7 @@ public class SpeakerBlockBuilder {
       String line = TextNormalizer.norm(raw);
 
       EmbeddedHeading embedded = embedded(line, knownSpeakers);
-      if (embedded.exists && text.length() > 0) {
+      if (embedded.exists) {
         EmbeddedResult result = applyEmbedded(
           embedded,
           line,
@@ -260,6 +268,20 @@ public class SpeakerBlockBuilder {
         lastSpeaker = result.lastSpeaker.isBlank()
           ? lastSpeaker
           : result.lastSpeaker;
+        break;
+      }
+
+      String recovered = leadingStageTailDialogue(line);
+      if (
+        !recovered.isEmpty() &&
+        previousSpeaker != null &&
+        !previousSpeaker.isBlank() &&
+        !sameSpeaker(previousSpeaker, heading.canonicalSpeaker)
+      ) {
+        extras.add(recoveredStageTailBlock(i, previousSpeaker, recovered, raw));
+        reason = appendReason(reason, "split_leading_stage_tail_dialogue");
+        end = i;
+        lastSpeaker = previousSpeaker;
         break;
       }
 
@@ -381,6 +403,47 @@ public class SpeakerBlockBuilder {
     return null;
   }
 
+  private static String leadingStageTailDialogue(String line) {
+    String cleaned = TextNormalizer.norm(line);
+    int close = cleaned.indexOf(')');
+    if (cleaned.isEmpty() || close < 0 || close > 110) {
+      return "";
+    }
+
+    String tail = TextNormalizer.norm(cleaned.substring(0, close + 1));
+    if (!looksLikeStageTail(tail)) {
+      return "";
+    }
+
+    String dialogue = TextNormalizer.cleanSpokenText(
+      cleaned.substring(close + 1)
+    );
+    if (dialogue.isEmpty()) {
+      return "";
+    }
+
+    return (
+        safeDialogue(dialogue) || SpeakerDetector.bareTurn(dialogue)
+      )
+      ? dialogue
+      : "";
+  }
+
+  private static boolean looksLikeStageTail(String line) {
+    String cleaned = TextNormalizer.norm(line);
+    if (cleaned.isEmpty() || !cleaned.endsWith(")")) {
+      return false;
+    }
+    if (cleaned.startsWith("(")) {
+      return true;
+    }
+
+    String lower = cleaned.toLowerCase();
+    return lower.matches(
+      "^(with|in|and|then|out|off|on|up|down|back|returns?|removes?|wipes?|serves?|goes?|comes?|enters?|exits?)\\b.*\\)$"
+    );
+  }
+
   private static boolean sameSpeaker(String tailSpeaker, String canonical) {
     String x = TextNormalizer.cleanName(tailSpeaker);
     String y = TextNormalizer.cleanName(canonical);
@@ -413,6 +476,25 @@ public class SpeakerBlockBuilder {
       "split_trailing_stage_direction",
       ParseModels.BlockType.STAGE_BLOCK,
       true
+    );
+  }
+
+  private static ParseModels.Block recoveredStageTailBlock(
+    int index,
+    String speaker,
+    String text,
+    String raw
+  ) {
+    return new ParseModels.Block(
+      index,
+      index,
+      speaker,
+      TextNormalizer.norm(text),
+      raw,
+      "LOW",
+      "recovered_leading_stage_tail_dialogue",
+      ParseModels.BlockType.SPEAKER_BLOCK,
+      false
     );
   }
 
@@ -772,6 +854,7 @@ public class SpeakerBlockBuilder {
     String lower = cleaned.toLowerCase();
     return (
       StageDetector.entranceExit(cleaned) ||
+      lower.matches("^scene\\s+[0-9ivx]+\\b.*") ||
       lower.contains("scene blacks out") ||
       lower.contains("scene fades out") ||
       lower.contains("lights fade") ||

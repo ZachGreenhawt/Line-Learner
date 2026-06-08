@@ -24,7 +24,7 @@ public class TextNormalizer {
 
   private static String stripTrailingSpeakerPunctuation(String text) {
     String out = norm(text);
-    while (out.endsWith(":") || out.endsWith(".")) {
+    while (out.endsWith(":") || out.endsWith(".") || out.endsWith(",")) {
       out = out.substring(0, out.length() - 1).strip();
     }
     return out;
@@ -138,6 +138,7 @@ public class TextNormalizer {
     while (
       out.startsWith(":") ||
       out.startsWith(".") ||
+      out.startsWith(",") ||
       out.startsWith(")") ||
       out.startsWith("]")
     ) {

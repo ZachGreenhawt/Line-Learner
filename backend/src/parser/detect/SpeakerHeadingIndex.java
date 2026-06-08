@@ -97,6 +97,17 @@ public class SpeakerHeadingIndex {
     if (line.isEmpty()) {
       return null;
     }
+
+    HeadingRecord explicitDialogue = explicitKnownDialogueHeading(
+      lineIndex,
+      line,
+      names,
+      aliases
+    );
+    if (explicitDialogue != null) {
+      return explicitDialogue;
+    }
+
     if (FrontMatterDetector.blockHeading(line, chars)) {
       return null;
     }
@@ -251,14 +262,15 @@ public class SpeakerHeadingIndex {
   private static int firstHeadingPunctuationIndex(String line) {
     int dot = line.indexOf('.');
     int colon = line.indexOf(':');
+    int comma = line.indexOf(',');
 
-    if (dot < 0) {
-      return colon;
+    int best = -1;
+    for (int index : new int[] { dot, colon, comma }) {
+      if (index >= 0 && (best < 0 || index < best)) {
+        best = index;
+      }
     }
-    if (colon < 0) {
-      return dot;
-    }
-    return Math.min(dot, colon);
+    return best;
   }
 
   private static int firstParentheticalIndex(String line) {
@@ -298,7 +310,8 @@ public class SpeakerHeadingIndex {
     if (
       upper.equals(aliasUpper) ||
       upper.equals(aliasUpper + ".") ||
-      upper.equals(aliasUpper + ":")
+      upper.equals(aliasUpper + ":") ||
+      upper.equals(aliasUpper + ",")
     ) {
       return new HeadingRecord(
         lineIndex,
@@ -308,6 +321,62 @@ public class SpeakerHeadingIndex {
         "",
         HeadingConfidence.HIGH,
         false,
+        false
+      );
+    }
+
+    return null;
+  }
+
+  private static HeadingRecord explicitKnownDialogueHeading(
+    int lineIndex,
+    String line,
+    List<String> names,
+    Map<String, String> aliases
+  ) {
+    String upper = TextNormalizer.norm(line).toUpperCase();
+
+    for (String candidate : names) {
+      String alias = TextNormalizer.cleanName(candidate);
+      if (alias.isEmpty()) {
+        continue;
+      }
+      if (!startsWithHeadingPunctuation(upper, alias)) {
+        continue;
+      }
+      if (!safeBoundaryAfterAlias(line, alias.length())) {
+        continue;
+      }
+
+      String after = cleanRemainingAfterHeading(
+        line.substring(Math.min(line.length(), alias.length() + 1)).trim()
+      );
+      if (after.isEmpty() || looksLikeStageOnlyContinuation(after)) {
+        return new HeadingRecord(
+          lineIndex,
+          line,
+          alias,
+          canonicalName(alias, aliases),
+          "",
+          HeadingConfidence.HIGH,
+          false,
+          false
+        );
+      }
+      if (!looksLikeDialogueRemainder(after)) continue;
+      if (
+        looksLikeCharacterActionOrNarration(after) ||
+        looksLikePublicationOrFurnitureRemainder(after)
+      ) continue;
+
+      return new HeadingRecord(
+        lineIndex,
+        line,
+        alias,
+        canonicalName(alias, aliases),
+        after,
+        HeadingConfidence.HIGH,
+        true,
         false
       );
     }
@@ -376,9 +445,7 @@ public class SpeakerHeadingIndex {
     String upper = line.toUpperCase();
 
     int end = alias.length();
-    if (
-      upper.startsWith(aliasUpper + ".") || upper.startsWith(aliasUpper + ":")
-    ) {
+    if (startsWithHeadingPunctuation(upper, aliasUpper)) {
       end = alias.length() + 1;
     } else if (upper.startsWith(aliasUpper + " ")) {
       end = alias.length();
@@ -641,7 +708,7 @@ public class SpeakerHeadingIndex {
 
     out = TextNormalizer.stripLeadingParentheticals(out);
 
-    while (out.startsWith(".") || out.startsWith(":")) {
+    while (startsWithHeadingPunctuation(out)) {
       out = TextNormalizer.norm(out.substring(1));
       out = TextNormalizer.stripLeadingParentheticals(out);
     }
@@ -779,7 +846,7 @@ public class SpeakerHeadingIndex {
         ? TextNormalizer.norm(normalized.substring(cleanAlias.length()))
         : "";
 
-    if (after.startsWith(":") || after.startsWith(".")) {
+    if (startsWithHeadingPunctuation(after)) {
       after = TextNormalizer.norm(after.substring(1));
     }
 
@@ -800,7 +867,28 @@ public class SpeakerHeadingIndex {
       return true;
     }
 
+    if (explicitDialogueHeading(normalized, cleanAlias, after)) {
+      return false;
+    }
+
     return FrontMatterDetector.blockHeading(normalized, chars);
+  }
+
+  private static boolean explicitDialogueHeading(
+    String line,
+    String alias,
+    String after
+  ) {
+    String upperLine = TextNormalizer.norm(line).toUpperCase();
+    String upperAlias = TextNormalizer.cleanName(alias);
+    String remainder = TextNormalizer.norm(after);
+
+    return (
+      startsWithHeadingPunctuation(upperLine, upperAlias) &&
+      !remainder.isEmpty() &&
+      looksLikeDialogueRemainder(remainder) &&
+      !looksLikeStageOnlyContinuation(remainder)
+    );
   }
 
   private static boolean startsWithTitleCaseAliasButNotHeading(
@@ -827,7 +915,7 @@ public class SpeakerHeadingIndex {
     }
 
     char next = cleaned.charAt(cleanAlias.length());
-    if (next == ':' || next == '.') {
+    if (next == ':' || next == '.' || next == ',') {
       return false;
     }
 
@@ -879,10 +967,31 @@ public class SpeakerHeadingIndex {
       Character.isWhitespace(next) ||
       next == ':' ||
       next == '.' ||
+      next == ',' ||
       next == '/' ||
       next == '(' ||
       next == '[' ||
       next == '{'
+    );
+  }
+
+  private static boolean startsWithHeadingPunctuation(
+    String text,
+    String alias
+  ) {
+    return (
+      text.startsWith(alias + ".") ||
+      text.startsWith(alias + ":") ||
+      text.startsWith(alias + ",")
+    );
+  }
+
+  private static boolean startsWithHeadingPunctuation(String text) {
+    String cleaned = TextNormalizer.norm(text);
+    return (
+      cleaned.startsWith(".") ||
+      cleaned.startsWith(":") ||
+      cleaned.startsWith(",")
     );
   }
 
@@ -917,11 +1026,18 @@ public class SpeakerHeadingIndex {
   }
 
   private static boolean looksLikeCharacterActionOrNarration(String after) {
-    String lower = TextNormalizer.norm(after).toLowerCase();
-    if (lower.isEmpty()) {
+    String cleaned = TextNormalizer.norm(after);
+    if (cleaned.isEmpty()) {
       return false;
     }
 
+    if (
+      cleaned.contains("?") || cleaned.contains("!") || cleaned.contains("\"")
+    ) {
+      return false;
+    }
+
+    String lower = cleaned.toLowerCase();
     return lower.matches(
       RegexTerms.startsWithAnyWord(RegexTerms.HEADING_ACTION_NARRATION)
     );
