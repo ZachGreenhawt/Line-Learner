@@ -6,10 +6,11 @@ It can run as a terminal Java app or through a simple local web UI. Scripts stay
 
 ## What It Does
 
-- Loads `.txt` and `.pdf` scripts
-- Uses native PDF text when reliable
-- Falls back to OCR for scanned or messy PDFs
-- Caches extracted PDF text so repeat uploads are faster
+- Loads `.txt`, `.pdf`, and photo/image scripts (JPG, PNG, HEIC, and more)
+- Uses native PDF text page by page when reliable
+- Falls back to OCR for scanned, photographed, or garbled pages, keeping good native text on the rest
+- Detects and corrects page orientation, including sideways and upside-down scans
+- Caches extracted text so repeat uploads are faster
 - Detects characters and speaker headings
 - Lets you add/remove detected characters before parsing
 - Lets you choose the starting line before parsing
@@ -22,7 +23,7 @@ It can run as a terminal Java app or through a simple local web UI. Scripts stay
 
 The web app provides the main workflow without needing to use the terminal prompts:
 
-1. Upload a `.txt` or `.pdf` script
+1. Upload a `.txt`, `.pdf`, or a photo of your script (JPG, PNG, HEIC)
 2. Review and edit the detected character list
 3. Pick the starting line
 4. Optionally enter repeated text to remove before parsing
@@ -30,7 +31,7 @@ The web app provides the main workflow without needing to use the terminal promp
 6. Parse the script
 7. Practice from cue to line
 
-Uploaded scripts are saved in `web/.data/uploads/`. The server fingerprints uploads by file contents, and if the same file is uploaded multiple times, it reuses the saved copy and cached extraction rather than treating it as a new script
+Uploaded scripts are saved in `web/.data/uploads/`. The server fingerprints uploads by file contents, and if the same file is uploaded multiple times, it reuses the saved copy and cached extraction rather than treating it as a new script.
 
 ## Run through the Website
 
@@ -85,7 +86,7 @@ On Windows replace `:` with `;`
 backend/
   src/
     app/        terminal entry point
-    ocr/        PDF native/OCR extraction
+    ocr/        native text and OCR extraction (PDF and images)
     parser/     script cleanup, character detection, cue parsing
     practice/   terminal practice session
     util/       shared text and regex helpers
@@ -110,7 +111,7 @@ The terminal parser writes CSV files for review:
 - `parser_suspicious_turns.csv`
 - `parser_health.csv`
 
-These files help compare parser behavior across real scripts and make debugging easier
+These files help compare parser behavior across real scripts and make debugging easier.
 
 ## Current Development Focus
 
@@ -127,7 +128,7 @@ Current priorities:
 ## Known Limitations
 
 - Script parsing is heuristic based and may still need manual review
-- OCR quality depends heavily on scan quality
+- OCR quality depends heavily on scan or photo quality
 - Prose heavy scripts and unusual formatting may still create `UNKNOWN` turns
 - Some parser diagnostics are intended for development rather than end users
 
