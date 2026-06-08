@@ -44,6 +44,8 @@ public class OrientationResolver {
       profile = new OcrRunProfile();
     }
 
+    Integer osdRotation = osdRotation(image, tesseract);
+
     OcrCandidate best = null;
     OcrSearchTier bestTier = null;
     Set<String> tried = new HashSet<>();
@@ -53,7 +55,9 @@ public class OrientationResolver {
     for (OcrSearchTier tier : tiers) {
       OcrCandidate tierBest = null;
 
-      for (int rotation : rotations(tier.rotations)) {
+      List<Integer> tierRotations =
+        osdRotation != null ? List.of(osdRotation) : rotations(tier.rotations);
+      for (int rotation : tierRotations) {
         BufferedImage rotated = rotate(image, rotation);
         if (rotated == null) {
           continue;
@@ -463,6 +467,32 @@ public class OrientationResolver {
       default:
         return 99;
     }
+  }
+
+  private static final double OSD_MIN_CONFIDENCE = 2.0;
+
+  private static Integer osdRotation(
+    BufferedImage image,
+    TesseractCli tesseract
+  ) {
+    if (image == null || tesseract == null) {
+      return null;
+    }
+
+    TesseractCli.Osd osd = tesseract.detectOrientation(image);
+    if (osd == null || osd.confidence < OSD_MIN_CONFIDENCE) {
+      return null;
+    }
+
+    int normalized = rotation(osd.rotate);
+    System.out.println(
+      String.format(
+        "OSD orientation: rotate=%d deg confidence=%.1f",
+        normalized,
+        osd.confidence
+      )
+    );
+    return normalized;
   }
 
   private static List<Integer> rotations(List<Integer> rotations) {

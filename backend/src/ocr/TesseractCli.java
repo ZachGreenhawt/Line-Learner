@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 
 /**
@@ -29,6 +31,13 @@ public class TesseractCli {
 
   /** Hard cap on a single OCR invocation; a hung child is killed and skipped. */
   private static final long TIMEOUT_SECONDS = 60;
+
+  private static final Pattern ROTATE_PATTERN = Pattern.compile(
+    "Rotate:\\s*(\\d+)"
+  );
+  private static final Pattern ORIENT_CONF_PATTERN = Pattern.compile(
+    "Orientation confidence:\\s*([0-9]+(?:\\.[0-9]+)?)"
+  );
 
   private final String binary;
   private final String datapath;
@@ -71,11 +80,11 @@ public class TesseractCli {
       return "";
     }
 
-    File input = File.createTempFile("line-learner-ocr-", ".png");
+    File input = File.createTempFile("line-learner-ocr-", ".bmp");
     try {
-      if (!ImageIO.write(image, "png", input)) {
+      if (!writeForOcr(image, input)) {
         throw new IOException(
-          "No PNG writer available to encode the OCR image"
+          "No image writer available to encode the OCR image"
         );
       }
       return run(input);
@@ -84,6 +93,14 @@ public class TesseractCli {
         input.deleteOnExit();
       }
     }
+  }
+
+  private static boolean writeForOcr(BufferedImage image, File file)
+    throws IOException {
+    if (ImageIO.write(image, "bmp", file)) {
+      return true;
+    }
+    return ImageIO.write(image, "png", file);
   }
 
   private String run(File input) throws IOException, InterruptedException {
@@ -102,6 +119,103 @@ public class TesseractCli {
     command.add("--psm");
     command.add(Integer.toString(psm));
 
+    ExecResult result = exec(command);
+    if (result.timedOut) {
+      System.out.println(
+        "tesseract CLI timed out after " +
+          TIMEOUT_SECONDS +
+          "s; skipping this region"
+      );
+      return "";
+    }
+    if (result.exit != 0) {
+      System.out.println(
+        "tesseract CLI exited with status " +
+          result.exit +
+          (result.stderr.isBlank() ? "" : " | " + result.stderr.trim()) +
+          "; skipping this region"
+      );
+      return "";
+    }
+
+    return result.stdout;
+  }
+
+  public Osd detectOrientation(BufferedImage image) {
+    if (image == null) {
+      return null;
+    }
+
+    try {
+      File input = File.createTempFile("line-learner-osd-", ".bmp");
+      try {
+        if (!writeForOcr(image, input)) {
+          return null;
+        }
+        return runOsd(input);
+      } finally {
+        if (!input.delete()) {
+          input.deleteOnExit();
+        }
+      }
+    } catch (IOException | InterruptedException error) {
+      return null;
+    }
+  }
+
+  private Osd runOsd(File input) throws IOException, InterruptedException {
+    List<String> command = new ArrayList<>();
+    command.add(binary);
+    command.add(input.getAbsolutePath());
+    command.add("stdout");
+    if (datapath != null && !datapath.isBlank()) {
+      command.add("--tessdata-dir");
+      command.add(datapath);
+    }
+    command.add("--psm");
+    command.add("0");
+
+    ExecResult result = exec(command);
+    if (result.timedOut || result.exit != 0) {
+      return null;
+    }
+
+    return parseOsd(result.stdout + "\n" + result.stderr);
+  }
+
+  private static Osd parseOsd(String report) {
+    if (report == null || report.isBlank()) {
+      return null;
+    }
+
+    Integer rotate = null;
+    Double confidence = null;
+
+    for (String line : report.split("\\R")) {
+      Matcher r = ROTATE_PATTERN.matcher(line);
+      if (r.find()) {
+        try {
+          rotate = Integer.parseInt(r.group(1));
+        } catch (NumberFormatException ignored) {
+          // leave rotate null
+        }
+      }
+      Matcher c = ORIENT_CONF_PATTERN.matcher(line);
+      if (c.find()) {
+        try {
+          confidence = Double.parseDouble(c.group(1));
+        } catch (NumberFormatException ignored) {}
+      }
+    }
+
+    if (rotate == null) {
+      return null;
+    }
+    return new Osd(rotate, confidence == null ? 0.0 : confidence);
+  }
+
+  private ExecResult exec(List<String> command)
+    throws IOException, InterruptedException {
     ProcessBuilder builder = new ProcessBuilder(command);
 
     Process process;
@@ -126,31 +240,42 @@ public class TesseractCli {
     boolean finished = process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     if (!finished) {
       process.destroyForcibly();
-      stdout.join();
-      stderr.join();
-      System.out.println(
-        "tesseract CLI timed out after " +
-          TIMEOUT_SECONDS +
-          "s; skipping this region"
-      );
-      return "";
+      return new ExecResult(stdout.join(), stderr.join(), -1, true);
     }
 
-    String text = stdout.join();
-    String errors = stderr.join();
-    int exit = process.exitValue();
+    return new ExecResult(
+      stdout.join(),
+      stderr.join(),
+      process.exitValue(),
+      false
+    );
+  }
 
-    if (exit != 0) {
-      System.out.println(
-        "tesseract CLI exited with status " +
-          exit +
-          (errors.isBlank() ? "" : " | " + errors.trim()) +
-          "; skipping this region"
-      );
-      return "";
+  public static final class Osd {
+
+    public final int rotate;
+
+    public final double confidence;
+
+    public Osd(int rotate, double confidence) {
+      this.rotate = ((rotate % 360) + 360) % 360;
+      this.confidence = confidence;
     }
+  }
 
-    return text;
+  private static final class ExecResult {
+
+    final String stdout;
+    final String stderr;
+    final int exit;
+    final boolean timedOut;
+
+    ExecResult(String stdout, String stderr, int exit, boolean timedOut) {
+      this.stdout = stdout == null ? "" : stdout;
+      this.stderr = stderr == null ? "" : stderr;
+      this.exit = exit;
+      this.timedOut = timedOut;
+    }
   }
 
   /**

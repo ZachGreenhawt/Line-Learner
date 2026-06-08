@@ -8,6 +8,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.Set;
+import java.util.function.Supplier;
+import ocr.ImageTextExtractor;
 import ocr.PdfTextExtractor;
 import parser.export.CsvExporter;
 import parser.session.ParserSessionStore;
@@ -17,7 +20,20 @@ public class ScriptLoader {
 
   private static final boolean USE_EXTRACTED_TEXT_CACHE = true;
   private static final String EXTRACTION_PIPELINE_VERSION =
-    "pdf-ocr-v2-orientation-spread";
+    "pdf-ocr-v5-page-hybrid";
+
+  private static final Set<String> IMAGE_EXTENSIONS = Set.of(
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".tif",
+    ".tiff",
+    ".webp",
+    ".heic",
+    ".heif"
+  );
 
   public static String load(Scanner sc) {
     String extension = extension(sc);
@@ -62,6 +78,11 @@ public class ScriptLoader {
       ParserSessionStore session = new ParserSessionStore(sessionName(name));
       session.ensureFolders();
       return readPdf(script, session, name);
+    }
+    if (isImage(lower) || isImage(pathLower)) {
+      ParserSessionStore session = new ParserSessionStore(sessionName(name));
+      session.ensureFolders();
+      return readImage(script, session, name);
     }
 
     throw new IOException("Unsupported file type: " + name);
@@ -124,8 +145,25 @@ public class ScriptLoader {
     ParserSessionStore session,
     String name
   ) {
+    return readCached(script, session, name, () -> pdf(script));
+  }
+
+  private static String readImage(
+    File script,
+    ParserSessionStore session,
+    String name
+  ) {
+    return readCached(script, session, name, () -> image(script));
+  }
+
+  private static String readCached(
+    File script,
+    ParserSessionStore session,
+    String name,
+    Supplier<String> extractor
+  ) {
     if (!USE_EXTRACTED_TEXT_CACHE) {
-      return pdf(script);
+      return extractor.get();
     }
 
     Path metaFile = session.textCsv().resolveSibling("extracted_text.meta");
@@ -136,7 +174,7 @@ public class ScriptLoader {
       return cached;
     }
 
-    String text = pdf(script);
+    String text = extractor.get();
     writeCache(session, metaFile, expectedMeta, text);
     return text;
   }
@@ -239,6 +277,39 @@ public class ScriptLoader {
       );
       return "";
     }
+  }
+
+  private static String image(File script) {
+    try {
+      return normalize(ImageTextExtractor.extract(script));
+    } catch (IOException e) {
+      System.out.println("Could not read image: " + script.getName());
+      System.out.println("Error: " + e.getMessage());
+      return "";
+    } catch (Throwable e) {
+      System.out.println(
+        "Could not finish image read for: " + script.getName()
+      );
+      System.out.println(
+        "Error: " + e.getClass().getSimpleName() + ": " + e.getMessage()
+      );
+      return "";
+    }
+  }
+
+  private static boolean isImage(String name) {
+    if (name == null) {
+      return false;
+    }
+
+    String lower = name.toLowerCase();
+    for (String ext : IMAGE_EXTENSIONS) {
+      if (lower.endsWith(ext)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private static String normalize(String text) {

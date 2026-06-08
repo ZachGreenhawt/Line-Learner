@@ -273,7 +273,9 @@ public class CharacterExtractor {
 
     for (String raw : text.split(RegexTerms.NEWLINE)) {
       String line = TextNormalizer.norm(raw);
-      if (StageDetector.skip(line) || (StageDetector.junk(line) && !heading(line))) {
+      if (
+        StageDetector.skip(line) || (StageDetector.junk(line) && !heading(line))
+      ) {
         continue;
       }
       addFromLine(counts, line);
@@ -611,8 +613,62 @@ public class CharacterExtractor {
       !actorName(name) &&
       !headerOrFooter(name) &&
       !repeated(name) &&
-      !combinedName(name, counts)
+      !combinedName(name, counts) &&
+      !subsumedByStrongerName(name, count, counts)
     );
+  }
+
+  private static boolean subsumedByStrongerName(
+    String name,
+    int count,
+    Map<String, Integer> counts
+  ) {
+    if (count > 2) {
+      return false;
+    }
+
+    String[] words = TextNormalizer.cleanName(name).split(
+      RegexTerms.WHITESPACE
+    );
+    if (words.length < 2) {
+      return false;
+    }
+
+    for (int len = words.length - 1; len >= 1; len--) {
+      if (dominantHost(join(words, 0, len), count, counts)) {
+        return true;
+      }
+      if (
+        dominantHost(
+          join(words, words.length - len, words.length),
+          count,
+          counts
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean dominantHost(
+    String host,
+    int count,
+    Map<String, Integer> counts
+  ) {
+    Integer hostCount = counts.get(host);
+    if (hostCount == null) {
+      return false;
+    }
+    return (
+      hostCount >= 4 &&
+      hostCount >= count * 4 &&
+      (roleName(host) || heading(host))
+    );
+  }
+
+  private static String join(String[] words, int from, int to) {
+    return String.join(" ", Arrays.copyOfRange(words, from, to));
   }
 
   private static boolean authorOrPublisher(String name) {
@@ -666,11 +722,7 @@ public class CharacterExtractor {
       return false;
     }
 
-    if (
-      upper.matches(
-        RegexTerms.US_STATE_SUFFIX
-      )
-    ) {
+    if (upper.matches(RegexTerms.US_STATE_SUFFIX)) {
       return true;
     }
 
@@ -774,13 +826,13 @@ public class CharacterExtractor {
 
   private static boolean roleWord(String name) {
     String upper = TextNormalizer.cleanName(name).toUpperCase();
-    return upper.matches(
-      RegexTerms.containsAnyWord(RegexTerms.ROLE_WORD)
-    );
+    return upper.matches(RegexTerms.containsAnyWord(RegexTerms.ROLE_WORD));
   }
 
   private static boolean repeated(String name) {
-    String[] words = TextNormalizer.cleanName(name).split(RegexTerms.WHITESPACE);
+    String[] words = TextNormalizer.cleanName(name).split(
+      RegexTerms.WHITESPACE
+    );
 
     if (words.length == 2) {
       return words[0].equals(words[1]);
@@ -795,7 +847,9 @@ public class CharacterExtractor {
     String name,
     Map<String, Integer> counts
   ) {
-    String[] words = TextNormalizer.cleanName(name).split(RegexTerms.WHITESPACE);
+    String[] words = TextNormalizer.cleanName(name).split(
+      RegexTerms.WHITESPACE
+    );
     if (words.length < 2 || words.length > MAX_NAME_WORDS) {
       return false;
     }

@@ -3,7 +3,11 @@ package ocr;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import ocr.model.*;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -21,7 +25,7 @@ public class PdfTextExtractor {
 
     HybridTextExtraction.Result result = HybridTextExtraction.extract(
       pdf,
-      file -> ocr(file, cache)
+      (file, pageNumbers) -> ocrPages(file, pageNumbers, cache)
     );
 
     cache.remember(pdf, result.source, result.selectedQuality.score);
@@ -31,9 +35,16 @@ public class PdfTextExtractor {
     return result.text;
   }
 
-  private static String ocr(File pdf, DocumentLearningCache cache)
-    throws Exception {
-    List<String> pages = new ArrayList<>();
+  static Map<Integer, String> ocrPages(
+    File pdf,
+    Set<Integer> pageNumbers,
+    DocumentLearningCache cache
+  ) throws Exception {
+    Map<Integer, String> out = new HashMap<>();
+    if (pageNumbers == null || pageNumbers.isEmpty()) {
+      return out;
+    }
+
     OcrDiagnosticsExporter.reset();
     ImagePreprocessor.reset();
 
@@ -44,14 +55,14 @@ public class PdfTextExtractor {
     try (PDDocument document = Loader.loadPDF(pdf)) {
       PDFRenderer renderer = new PDFRenderer(document);
       TesseractCli tesseract = makeTesseract();
+      int pageCount = document.getNumberOfPages();
 
-      for (
-        int pageIndex = 0;
-        pageIndex < document.getNumberOfPages();
-        pageIndex++
-      ) {
-        int pageNumber = pageIndex + 1;
-        System.out.println("Processing page " + pageNumber);
+      for (int pageNumber : new TreeSet<>(pageNumbers)) {
+        int pageIndex = pageNumber - 1;
+        if (pageIndex < 0 || pageIndex >= pageCount) {
+          continue;
+        }
+        System.out.println("OCR page " + pageNumber);
 
         BufferedImage pageImage = renderer.renderImageWithDPI(
           pageIndex,
@@ -59,31 +70,10 @@ public class PdfTextExtractor {
           ImageType.RGB
         );
 
-        List<BufferedImage> regions = PageRegionExtractor.regions(pageImage);
-
-        List<OcrResult> results = new ArrayList<>();
-
-        for (int regionIndex = 0; regionIndex < regions.size(); regionIndex++) {
-          OcrResult result = OrientationResolver.result(
-            regions.get(regionIndex),
-            tesseract,
-            pageNumber,
-            regionIndex + 1,
-            profile
-          );
-
-          rememberConfidentOcrTrial(pdf, store, result);
-
-          results.add(result);
-        }
-
-        List<ReadingOrderResolver.Region> ordered =
-          ReadingOrderResolver.fromOcr(pageNumber, results);
-
-        String pageText = cleanText(ReadingOrderResolver.assemble(ordered));
-        if (!pageText.isBlank()) {
-          pages.add(pageText);
-        }
+        out.put(
+          pageNumber,
+          ocrOnePage(pdf, pageImage, pageNumber, tesseract, profile, store)
+        );
       }
     }
 
@@ -91,10 +81,48 @@ public class PdfTextExtractor {
     ImagePreprocessor.printSummary();
     System.out.println(profile.summary());
 
-    return cleanPages(pages);
+    return out;
   }
 
-  private static String cleanPages(List<String> pages) {
+  static String ocrOnePage(
+    File source,
+    BufferedImage pageImage,
+    int pageNumber,
+    TesseractCli tesseract,
+    OcrRunProfile profile,
+    DocumentLearningCache store
+  ) throws Exception {
+    if (pageImage == null) {
+      return "";
+    }
+
+    List<BufferedImage> regions = PageRegionExtractor.regions(pageImage);
+
+    List<OcrResult> results = new ArrayList<>();
+
+    for (int regionIndex = 0; regionIndex < regions.size(); regionIndex++) {
+      OcrResult result = OrientationResolver.result(
+        regions.get(regionIndex),
+        tesseract,
+        pageNumber,
+        regionIndex + 1,
+        profile
+      );
+
+      rememberConfidentOcrTrial(source, store, result);
+
+      results.add(result);
+    }
+
+    List<ReadingOrderResolver.Region> ordered = ReadingOrderResolver.fromOcr(
+      pageNumber,
+      results
+    );
+
+    return cleanText(ReadingOrderResolver.assemble(ordered));
+  }
+
+  static String cleanPages(List<String> pages) {
     if (pages == null || pages.isEmpty()) {
       return "";
     }
@@ -160,7 +188,7 @@ public class PdfTextExtractor {
     );
   }
 
-  private static String cleanText(String text) {
+  static String cleanText(String text) {
     if (text == null || text.isBlank()) {
       return "";
     }
@@ -205,7 +233,7 @@ public class PdfTextExtractor {
     return text.replaceAll(RegexTerms.NEWLINE_RUN, "\\n\\n");
   }
 
-  private static TesseractCli makeTesseract() {
+  static TesseractCli makeTesseract() {
     return new TesseractCli(tessdataPath(), "eng", 1, 3);
   }
 

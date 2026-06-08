@@ -31,9 +31,29 @@ show(form);
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  out.textContent = "Uploading...";
+  const fileInput = document.querySelector("#file");
+  let file = fileInput?.files?.[0] || null;
+
+  if (!file) {
+    out.textContent = "Please choose a script file or a photo first.";
+    return;
+  }
 
   const scriptData = new FormData(form);
+
+  if (isHeic(file)) {
+    out.textContent = "Converting photo…";
+    try {
+      file = await heicToJpeg(file);
+      scriptData.set("user-file", file);
+    } catch (error) {
+      out.textContent =
+        "That photo couldn't be converted. Try saving it as JPEG or PNG, then upload again.";
+      return;
+    }
+  }
+
+  out.textContent = "Uploading...";
 
   const res = await fetch("/api/upload", {
     method: "POST",
@@ -52,6 +72,25 @@ form.addEventListener("submit", async (e) => {
     data.message || "Upload saved. Review the setup before parsing.",
   );
 });
+
+function isHeic(file) {
+  if (!file) {
+    return false;
+  }
+  return /image\/hei[cf]/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+}
+
+async function heicToJpeg(file) {
+  const { default: heic2any } = await import("heic2any");
+  const converted = await heic2any({
+    blob: file,
+    toType: "image/jpeg",
+    quality: 0.92,
+  });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  const base = file.name.replace(/\.(heic|heif)$/i, "") || "photo";
+  return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+}
 
 saveCharacters.addEventListener("click", () => {
   if (!currentScript) return;

@@ -50,12 +50,62 @@ const storage = multer.diskStorage({
   },
 });
 
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  ".pdf",
+  ".txt",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".bmp",
+  ".tif",
+  ".tiff",
+  ".webp",
+  ".heic",
+  ".heif",
+]);
+
 const upload = multer({
   storage,
   limits: {
     fileSize: 80 * 1024 * 1024,
   },
+  fileFilter(req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_UPLOAD_EXTENSIONS.has(ext)) {
+      cb(null, true);
+      return;
+    }
+    const error = new Error(
+      "Unsupported file type. Upload a PDF, a TXT file, or a photo (JPG, PNG, or HEIC).",
+    );
+    error.code = "UNSUPPORTED_FILE_TYPE";
+    cb(error);
+  },
 });
+
+// Wraps a multer single-file middleware so a rejected upload (wrong type or too
+// large) returns JSON the frontend already knows how to display, instead of
+// multer's default HTML error response.
+function uploadSingle(field) {
+  const middleware = upload.single(field);
+  return (req, res, next) => {
+    middleware(req, res, (error) => {
+      if (!error) {
+        next();
+        return;
+      }
+      const tooBig = error.code === "LIMIT_FILE_SIZE";
+      res.status(tooBig ? 413 : 400).json({
+        ok: false,
+        error:
+          tooBig ?
+            "That file is too large. The maximum upload size is 80 MB."
+          : error.message || "That file could not be uploaded.",
+      });
+    });
+  };
+}
 
 app.use(express.json());
 app.use((req, res, next) => {
@@ -180,7 +230,7 @@ function mergeMetrics(saved) {
   };
 }
 
-async function readMetrics() {
+async function readMetricsFromDisk() {
   try {
     return mergeMetrics(JSON.parse(await readFile(METRICS_FILE, "utf8")));
   } catch (error) {
@@ -194,7 +244,7 @@ async function readMetrics() {
   }
 }
 
-let metrics = await readMetrics();
+let metrics = recomputeOverall(await readMetricsFromDisk());
 let metricsWrite = Promise.resolve();
 
 function validTimeZone(zone) {
@@ -213,9 +263,12 @@ function metricsTimeZone() {
   }
 
   if (zone) {
-    console.warn("[metrics] invalid timezone env value, using server timezone", {
-      zone,
-    });
+    console.warn(
+      "[metrics] invalid timezone env value, using server timezone",
+      {
+        zone,
+      },
+    );
   }
 
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -293,10 +346,107 @@ function nextMetricsSendDelay() {
   return Math.max(1_000, target - now);
 }
 
-function saveMetrics() {
+function earliestIso(a, b) {
+  const ta = Date.parse(a || "");
+  const tb = Date.parse(b || "");
+  if (Number.isFinite(ta) && Number.isFinite(tb)) {
+    return ta <= tb ? a : b;
+  }
+  return a || b || "";
+}
+
+function latestIso(a, b) {
+  const ta = Date.parse(a || "");
+  const tb = Date.parse(b || "");
+  if (Number.isFinite(ta) && Number.isFinite(tb)) {
+    return ta >= tb ? a : b;
+  }
+  return b || a || "";
+}
+
+function mergeDayCounts(into, from) {
+  if (!from || typeof from !== "object") {
+    return;
+  }
+  for (const [key, value] of Object.entries(from)) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+      continue;
+    }
+    // Counters only grow from a shared base, so the larger value is the live one
+    // for the normal single-writer / restart case, and a safe choice otherwise.
+    into[key] = Math.max(into[key] || 0, n);
+  }
+}
+
+// Reconcile two metrics snapshots without losing history: union every day bucket
+// and, per event key, keep the larger count. This is what stops a process that
+// starts with partial/empty state (concurrent instance, restart mid-write) from
+// overwriting days that already exist on disk.
+function deepMergeMetrics(base, incoming) {
+  const a = mergeMetrics(base);
+  const b = mergeMetrics(incoming);
+  const out = {
+    startedAt: earliestIso(a.startedAt, b.startedAt),
+    updatedAt: latestIso(a.updatedAt, b.updatedAt),
+    counts: {},
+    days: {},
+    dailyEmails: { ...a.dailyEmails, ...b.dailyEmails },
+  };
+
+  const dayKeys = new Set([...Object.keys(a.days), ...Object.keys(b.days)]);
+  for (const day of dayKeys) {
+    out.days[day] = {};
+    mergeDayCounts(out.days[day], a.days[day]);
+    mergeDayCounts(out.days[day], b.days[day]);
+  }
+
+  return recomputeOverall(out);
+}
+
+function recomputeOverall(m) {
+  if (!m || typeof m !== "object") {
+    return m;
+  }
+  const previous = m.counts && typeof m.counts === "object" ? m.counts : {};
+  const totals = {};
+
+  for (const day of Object.values(m.days || {})) {
+    if (!day || typeof day !== "object") {
+      continue;
+    }
+    for (const [key, value] of Object.entries(day)) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) {
+        continue;
+      }
+      totals[key] = (totals[key] || 0) + n;
+    }
+  }
+
+  for (const [key, value] of Object.entries(previous)) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+      continue;
+    }
+    totals[key] = Math.max(totals[key] || 0, n);
+  }
+
+  m.counts = totals;
+  return m;
+}
+function updateMetrics(mutator) {
   metricsWrite = metricsWrite
     .catch(() => {})
     .then(async () => {
+      const disk = await readMetricsFromDisk();
+      const merged = deepMergeMetrics(disk, metrics);
+      if (typeof mutator === "function") {
+        mutator(merged);
+      }
+      merged.updatedAt = new Date().toISOString();
+      recomputeOverall(merged);
+      metrics = merged;
       await mkdir(DATA_DIR, { recursive: true });
       await writeFile(METRICS_FILE, JSON.stringify(metrics, null, 2));
     });
@@ -308,6 +458,10 @@ function saveMetrics() {
   });
 
   return metricsWrite;
+}
+
+function saveMetrics() {
+  return updateMetrics();
 }
 
 async function recordMetric(name, amount = 1) {
@@ -322,11 +476,11 @@ async function recordMetric(name, amount = 1) {
 
   const count = Number.isFinite(amount) ? amount : 1;
   const day = localDayKey();
-  metrics.updatedAt = new Date().toISOString();
-  metrics.counts[key] = (metrics.counts[key] || 0) + count;
-  metrics.days[day] = metrics.days[day] || {};
-  metrics.days[day][key] = (metrics.days[day][key] || 0) + count;
-  await saveMetrics();
+
+  await updateMetrics((m) => {
+    m.days[day] = m.days[day] || {};
+    m.days[day][key] = (m.days[day][key] || 0) + count;
+  });
 }
 
 async function saveScript(script) {
@@ -677,7 +831,7 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-app.post("/api/upload", upload.single("user-file"), async (req, res) => {
+app.post("/api/upload", uploadSingle("user-file"), async (req, res) => {
   if (!req.file) {
     sendMissingScript(res);
     return;
@@ -702,7 +856,7 @@ app.post("/api/upload", upload.single("user-file"), async (req, res) => {
   }
 });
 
-app.post("/api/analyze", upload.single("script"), async (req, res) => {
+app.post("/api/analyze", uploadSingle("script"), async (req, res) => {
   if (!req.file) {
     sendMissingScript(res);
     return;
@@ -1086,10 +1240,10 @@ async function sendDailyMetrics(day) {
     text: metricsLines(day),
   });
 
-  metrics.dailyEmails = metrics.dailyEmails || {};
-  metrics.dailyEmails[day] = new Date().toISOString();
-  metrics.updatedAt = new Date().toISOString();
-  await saveMetrics();
+  const sentAt = new Date().toISOString();
+  await updateMetrics((m) => {
+    m.dailyEmails[day] = sentAt;
+  });
   return true;
 }
 
@@ -1133,7 +1287,6 @@ function scheduleDailyMetricsEmail() {
 
   timer.unref();
 }
-
 
 const ISSUE_LABELS = {
   wrong_speaker: "Wrong speaker",
@@ -1191,7 +1344,10 @@ function valueScore(issue) {
   }
 
   const label =
-    score >= 75 ? "very high" : score >= 55 ? "high" : score >= 35 ? "medium" : "low";
+    score >= 75 ? "very high"
+    : score >= 55 ? "high"
+    : score >= 35 ? "medium"
+    : "low";
   return { score, label, reasons };
 }
 
@@ -1202,28 +1358,54 @@ function likelyCauses(issue) {
   const causes = [];
 
   if (kind === "wrong_speaker") {
-    causes.push("SpeakerHeadingIndex may have missed or misread a nearby heading.");
-    causes.push("SpeakerBlockBuilder may have carried dialogue into the previous speaker block.");
-    causes.push("CuePairBuilder may have paired the target line with the wrong previous turn.");
+    causes.push(
+      "SpeakerHeadingIndex may have missed or misread a nearby heading.",
+    );
+    causes.push(
+      "SpeakerBlockBuilder may have carried dialogue into the previous speaker block.",
+    );
+    causes.push(
+      "CuePairBuilder may have paired the target line with the wrong previous turn.",
+    );
     if (type === "scene-start cue") {
-      causes.push("Scene-start cue means no previous non-target cue was found before this target line.");
+      causes.push(
+        "Scene-start cue means no previous non-target cue was found before this target line.",
+      );
     }
   } else if (kind === "stage_direction") {
-    causes.push("StageDetector or source-only block rules likely classified spoken text as action.");
-    causes.push("Check parenthetical, indentation, and action-verb rules around this block.");
+    causes.push(
+      "StageDetector or source-only block rules likely classified spoken text as action.",
+    );
+    causes.push(
+      "Check parenthetical, indentation, and action-verb rules around this block.",
+    );
   } else if (kind === "dialogue") {
-    causes.push("Dialogue may have been dropped as stage/source-only text or page furniture.");
-    causes.push("Check line continuation and bare-turn detection around this block.");
+    causes.push(
+      "Dialogue may have been dropped as stage/source-only text or page furniture.",
+    );
+    causes.push(
+      "Check line continuation and bare-turn detection around this block.",
+    );
   } else if (kind === "lyric") {
-    causes.push("MusicDetector may have missed lyric shape, song boundary, or ensemble context.");
+    causes.push(
+      "MusicDetector may have missed lyric shape, song boundary, or ensemble context.",
+    );
   } else if (kind === "music_cue") {
-    causes.push("Music cue may have been treated as stage direction or dialogue.");
+    causes.push(
+      "Music cue may have been treated as stage direction or dialogue.",
+    );
   } else if (kind === "split_block") {
-    causes.push("A speaker change or stage boundary may be embedded inside one parsed block.");
+    causes.push(
+      "A speaker change or stage boundary may be embedded inside one parsed block.",
+    );
   } else if (kind === "merge_block") {
-    causes.push("A wrapped dialogue line may have been split into separate blocks.");
+    causes.push(
+      "A wrapped dialogue line may have been split into separate blocks.",
+    );
   } else if (kind === "exclude_line") {
-    causes.push("Page furniture, running header, or cleanup removal may not have matched this line.");
+    causes.push(
+      "Page furniture, running header, or cleanup removal may not have matched this line.",
+    );
   }
 
   return causes;
@@ -1233,7 +1415,10 @@ function missingSignals(issue) {
   const missing = [];
   const kind = issueKind(issue);
 
-  if (kind === "wrong_speaker" && !cleanText(issue?.after?.expectedSpeakerMask, 80)) {
+  if (
+    kind === "wrong_speaker" &&
+    !cleanText(issue?.after?.expectedSpeakerMask, 80)
+  ) {
     missing.push("correct speaker");
   }
   if (!cleanText(issue?.before?.classification, 80)) {
@@ -1368,10 +1553,18 @@ function parserReportBody(issues) {
     );
 
     if (value.reasons.length) {
-      lines.push("", "Value reasons", ...value.reasons.map((reason) => `- ${reason}`));
+      lines.push(
+        "",
+        "Value reasons",
+        ...value.reasons.map((reason) => `- ${reason}`),
+      );
     }
     if (missing.length) {
-      lines.push("", "Missing high-value data", ...missing.map((item) => `- ${item}`));
+      lines.push(
+        "",
+        "Missing high-value data",
+        ...missing.map((item) => `- ${item}`),
+      );
     }
   });
 
@@ -1384,9 +1577,12 @@ function parserReportBody(issues) {
 }
 
 app.post("/api/parser-report", async (req, res) => {
-  const issues = Array.isArray(req.body?.issues) ? req.body.issues.slice(0, 50) : [];
+  const issues =
+    Array.isArray(req.body?.issues) ? req.body.issues.slice(0, 50) : [];
   if (!issues.length) {
-    return res.status(400).json({ ok: false, error: "No parser issues to report." });
+    return res
+      .status(400)
+      .json({ ok: false, error: "No parser issues to report." });
   }
 
   try {
@@ -1405,7 +1601,8 @@ app.post("/api/parser-report", async (req, res) => {
     });
     res.status(502).json({
       ok: false,
-      error: error.publicMessage || "Couldn't send the parser report right now.",
+      error:
+        error.publicMessage || "Couldn't send the parser report right now.",
     });
   }
 });
