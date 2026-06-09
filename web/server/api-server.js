@@ -1188,10 +1188,14 @@ function metricsLines(day) {
   const entries = metricEntries(metrics.days?.[day] || {});
   const totalEntries = metricEntries(metrics.counts || {});
   const days = metricDayKeys();
+  const hours = (s) => ((Number(s) || 0) / 3600).toFixed(1);
 
   const lines = [
-    `Your Script daily metrics — ${day}`,
+    `Your Script daily metrics - ${day}`,
     `Timezone: ${METRICS_TIME_ZONE}`,
+    "",
+    `Rehearsal facilitated today: ${hours(metrics.days?.[day]?.rehearsal_seconds)} hours`,
+    `Rehearsal facilitated all-time: ${hours(metrics.counts?.rehearsal_seconds)} hours`,
     "",
   ];
 
@@ -1652,7 +1656,11 @@ app.post("/api/feedback", async (req, res) => {
 
 app.post("/api/event", async (req, res) => {
   try {
-    await recordMetric(req.body?.event || "event");
+    const name = req.body?.event || "event";
+    const raw = Number(req.body?.amount);
+    const amount =
+      Number.isFinite(raw) && raw > 0 ? Math.min(Math.round(raw), 14400) : 1;
+    await recordMetric(name, amount);
   } catch {}
   res.sendStatus(204);
 });
