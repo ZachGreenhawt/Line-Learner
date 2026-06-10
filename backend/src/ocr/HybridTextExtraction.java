@@ -8,9 +8,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
 import parser.detect.PageFurnitureDetector;
 
 public class HybridTextExtraction {
@@ -262,32 +259,7 @@ public class HybridTextExtraction {
   }
 
   public static List<Page> nativePages(File pdf) throws Exception {
-    if (pdf == null || !pdf.exists()) {
-      return Collections.emptyList();
-    }
-
-    List<Page> pages = new ArrayList<>();
-
-    try (PDDocument document = Loader.loadPDF(pdf)) {
-      PDFTextStripper stripper = new PDFTextStripper();
-      stripper.setSortByPosition(true);
-
-      int pageCount = document.getNumberOfPages();
-
-      for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
-        stripper.setStartPage(pageNumber);
-        stripper.setEndPage(pageNumber);
-
-        String text = TextExtractionQualityScorer.cleanText(
-          stripper.getText(document)
-        );
-        pages.add(
-          new Page(pageNumber, text, TextExtractionQualityScorer.score(text))
-        );
-      }
-    }
-
-    return pages;
+    return NativeColumnTextExtractor.pages(pdf);
   }
 
   private static List<String> texts(List<Page> pages) {
