@@ -29,6 +29,16 @@ public class CharacterExtractor {
     "PREFACE",
     "CREDITS",
     "COPYRIGHT",
+    "INT",
+    "EXT",
+    "I/E",
+    "INT/EXT",
+    "EST",
+    "FADE IN",
+    "FADE OUT",
+    "CUT TO",
+    "DISSOLVE TO",
+    "BACK TO",
     "AT RISE",
     "SOUNDS",
     "SONG",
@@ -51,6 +61,7 @@ public class CharacterExtractor {
     "SO",
     "WHAT",
     "WHY",
+    "RIGHT",
     "NOTHING",
     "PLEASE",
     "LOOK",
@@ -71,7 +82,12 @@ public class CharacterExtractor {
     "I SEE",
     "I DID NOT",
     "I DON'T KNOW",
-    "ALL RIGHT WITH ME"
+    "ALL RIGHT WITH ME",
+    "MR",
+    "MRS",
+    "MS",
+    "MISS",
+    "DR"
   );
 
   private static final int MAX_NAME_LENGTH = 45;

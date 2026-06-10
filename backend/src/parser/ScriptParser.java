@@ -111,7 +111,11 @@ public class ScriptParser {
       }
     }
 
-    return backtrackFromBridgeLine(lines, bestIndex, chars);
+    return trimLeadingNoise(
+      lines,
+      backtrackFromBridgeLine(lines, bestIndex, chars),
+      chars
+    );
   }
 
   private static int bodyStartSearchEnd(List<String> lines, int safeInitial) {
@@ -300,6 +304,46 @@ public class ScriptParser {
     return safeIndex;
   }
 
+  private static int trimLeadingNoise(
+    List<String> lines,
+    int index,
+    Set<String> chars
+  ) {
+    if (lines == null || lines.isEmpty()) {
+      return 0;
+    }
+
+    int safeIndex = Math.max(0, Math.min(index, lines.size() - 1));
+    int limit = Math.min(lines.size(), safeIndex + 20);
+
+    for (int i = safeIndex; i < limit; i++) {
+      String line = TextNormalizer.norm(lines.get(i));
+      if (leadingNoise(line, chars)) {
+        continue;
+      }
+      return i;
+    }
+
+    return safeIndex;
+  }
+
+  private static boolean leadingNoise(String line, Set<String> chars) {
+    String t = TextNormalizer.norm(line);
+    if (t.isEmpty()) {
+      return true;
+    }
+    if (FrontMatterDetector.is(t)) {
+      return true;
+    }
+    if (t.matches("(?i)^[A-Z][a-z]+\\s+\\d{1,2},\\s+\\d{4}$")) {
+      return true;
+    }
+    if (t.matches("(?i)^\\d{1,2}/\\d{1,2}\\s*/?\\d{2,4}\\b.*\\bpg\\.?\\s*\\d+.*$")) {
+      return true;
+    }
+    return false;
+  }
+
   private static boolean bridgeLine(String line) {
     String t = TextNormalizer.norm(line);
     if (t.isEmpty()) {
@@ -327,6 +371,8 @@ public class ScriptParser {
       upper.startsWith("BEFORE THE CURTAIN") ||
       upper.startsWith("SCENE:") ||
       upper.startsWith("SOUNDS:") ||
+      StageDetector.screenplayScene(upper) ||
+      StageDetector.screenplayTransition(upper) ||
       upper.matches(RegexTerms.EPISODE_HEADING) ||
       upper.matches(RegexTerms.ACT_HEADING) ||
       upper.matches(RegexTerms.SCENE_HEADING)

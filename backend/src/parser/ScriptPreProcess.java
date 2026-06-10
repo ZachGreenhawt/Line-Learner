@@ -419,7 +419,10 @@ public class ScriptPreProcess {
         result.add("");
       } else if (suppressRepeated(lines, i, t, count)) {
         result.add("");
-      } else if (lowValueArtifact(cleanedNormalized)) {
+      } else if (
+        lowValueArtifact(cleanedNormalized) &&
+        !numericSpeakerLine(lines, i, cleanedNormalized)
+      ) {
         result.add("");
       } else {
         result.add(cleanedLine);
@@ -526,6 +529,45 @@ public class ScriptPreProcess {
     if (letters == 0 && digits > 0 && punctuation >= digits) return true;
     if (letters <= 2 && punctuation + digits >= 4) return true;
     if (weird >= 3 && letters <= 6) return true;
+
+    return false;
+  }
+
+  private static boolean numericSpeakerLine(
+    List<String> lines,
+    int index,
+    String line
+  ) {
+    String t = norm(line);
+    if (t.isEmpty() || PAGE_NUMBER_ONLY.matcher(t).matches()) {
+      return false;
+    }
+
+    int digits = 0;
+    int letters = 0;
+    for (int i = 0; i < t.length(); i++) {
+      char ch = t.charAt(i);
+      if (Character.isDigit(ch)) digits++;
+      if (Character.isLetter(ch)) letters++;
+    }
+
+    if (digits == 0 || letters > 0) {
+      return false;
+    }
+
+    for (int i = index - 1; i >= 0 && i >= index - 4; i--) {
+      String prev = norm(lines.get(i));
+      if (prev.isEmpty()) {
+        continue;
+      }
+      if (SpeakerDetector.looksLike(prev)) {
+        return true;
+      }
+      if (prev.startsWith("(") && prev.endsWith(")")) {
+        continue;
+      }
+      break;
+    }
 
     return false;
   }
