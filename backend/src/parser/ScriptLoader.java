@@ -20,7 +20,7 @@ public class ScriptLoader {
 
   private static final boolean USE_EXTRACTED_TEXT_CACHE = true;
   private static final String EXTRACTION_PIPELINE_VERSION =
-    "pdf-ocr-v6-native-columns";
+    "pdf-ocr-v7-column-bands";
 
   private static final Set<String> IMAGE_EXTENSIONS = Set.of(
     ".jpg",

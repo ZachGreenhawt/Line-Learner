@@ -31,7 +31,7 @@ public class ScriptPreProcess {
 
   public static String clean(String text) {
     if (text == null || text.isEmpty()) return "";
-    String normalized = raw(text);
+    String normalized = mergeSingleGlyphRuns(raw(text));
     String[] lines = normalized.split(RegexTerms.NEWLINE_CHAR, -1);
     List<String> cleanedLines = new ArrayList<>();
 
@@ -46,7 +46,10 @@ public class ScriptPreProcess {
       String line = scrub(norm(raw));
       if (
         !structural(line) &&
-        (junk(line) || badExtraction(line) || headerFooter(line))
+        (junk(line) ||
+          badExtraction(line) ||
+          headerFooter(line) ||
+          dottedLeader(line))
       ) {
         cleanedLines.add("");
         continue;
@@ -71,6 +74,66 @@ public class ScriptPreProcess {
       out.append(cleanedLine).append('\n');
     }
     return out.toString().replaceFirst(RegexTerms.TRAILING_WHITESPACE, "");
+  }
+
+  private static boolean dottedLeader(String line) {
+    if (line == null || line.length() < 8) return false;
+    for (String token : line.split(" ")) {
+      if (token.matches("[A-Za-z']+\\.{1,5}[.,!?;:'\"]*")) continue;
+      if (token.matches(".*\\.{6,}.*")) return true;
+      if (
+        token.length() >= 12 &&
+        token.matches("[a-z.]+") &&
+        token.chars().filter(c -> c == '.').count() >= 2
+      ) return true;
+      if (token.matches("[0oO]{2,5}\\.{3,}")) return true;
+      if (token.length() >= 20 && token.matches("[a-z.]+")) {
+        long distinct = token
+          .chars()
+          .filter(Character::isLetter)
+          .distinct()
+          .count();
+        if (token.indexOf('.') >= 0 || distinct <= 7) return true;
+      }
+    }
+    return false;
+  }
+
+  private static String mergeSingleGlyphRuns(String text) {
+    if (text == null || text.isEmpty()) return text;
+    String[] lines = text.split(RegexTerms.NEWLINE_CHAR, -1);
+    StringBuilder out = new StringBuilder(text.length());
+    int i = 0;
+    while (i < lines.length) {
+      if (singleGlyph(lines[i])) {
+        int j = i;
+        int letters = 0;
+        StringBuilder token = new StringBuilder();
+        while (j < lines.length && singleGlyph(lines[j])) {
+          char c = lines[j].trim().charAt(0);
+          token.append(c);
+          if (Character.isLetter(c)) letters++;
+          j++;
+        }
+        if (j - i >= 3 && letters >= 2) {
+          out.append(token).append('\n');
+          i = j;
+          continue;
+        }
+      }
+      out.append(lines[i]).append('\n');
+      i++;
+    }
+    if (out.length() > 0) out.setLength(out.length() - 1);
+    return out.toString();
+  }
+
+  private static boolean singleGlyph(String line) {
+    if (line == null) return false;
+    String t = line.trim();
+    if (t.length() != 1) return false;
+    char c = t.charAt(0);
+    return Character.isLetter(c) || ".,:;'".indexOf(c) >= 0;
   }
 
   public static String removePhrases(String text, List<String> phrases) {
@@ -127,8 +190,19 @@ public class ScriptPreProcess {
 
     cleaned = INLINE_PAGE_HEADER.matcher(cleaned).replaceAll(" ");
     cleaned = PAGE_RANGE_HEADER.matcher(cleaned).replaceAll(" ");
+    cleaned = restoreLonePronoun(cleaned);
 
     return cleaned.replaceAll(RegexTerms.WHITESPACE, " ").trim();
+  }
+
+  private static final java.util.regex.Pattern GLYPH_PRONOUN =
+    java.util.regex.Pattern.compile("(^|[\\s(\"'“‘])[|\\[](?=\\s[a-z])");
+  private static final java.util.regex.Pattern ONE_PRONOUN =
+    java.util.regex.Pattern.compile("(^|[.!?…)]\\s)1(?=\\s[a-z])");
+
+  private static String restoreLonePronoun(String line) {
+    String out = GLYPH_PRONOUN.matcher(line).replaceAll("$1I");
+    return ONE_PRONOUN.matcher(out).replaceAll("$1I");
   }
 
   private static boolean structural(String line) {
