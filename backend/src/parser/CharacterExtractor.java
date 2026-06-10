@@ -93,6 +93,12 @@ public class CharacterExtractor {
   private static final int MAX_NAME_LENGTH = 45;
   private static final int MAX_NAME_WORDS = 5;
 
+  private static final Set<String> BARE_NUMBER_WORDS = Set.of(
+    "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE",
+    "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN",
+    "SEVENTEEN", "EIGHTEEN", "NINETEEN", "TWENTY"
+  );
+
   public static Set<String> load(ParserSessionStore session) {
     Set<String> saved = new LinkedHashSet<>();
     if (session == null) {
@@ -630,7 +636,22 @@ public class CharacterExtractor {
       !headerOrFooter(name) &&
       !repeated(name) &&
       !combinedName(name, counts) &&
-      !subsumedByStrongerName(name, count, counts)
+      !subsumedByStrongerName(name, count, counts) &&
+      !bareNumberOrShort(name)
+    );
+  }
+
+  private static boolean bareNumberOrShort(String name) {
+    String n = TextNormalizer.cleanName(name);
+    String[] w = n.split(RegexTerms.WHITESPACE);
+    if (w.length != 1) {
+      return false;
+    }
+    String only = w[0];
+    return (
+      only.length() <= 2 ||
+      BARE_NUMBER_WORDS.contains(only.toUpperCase()) ||
+      only.matches("\\d+")
     );
   }
 
@@ -922,7 +943,7 @@ public class CharacterExtractor {
       }
 
       String last = lastName(name);
-      if (!last.isEmpty()) {
+      if (!last.isEmpty() && !bareNumberOrShort(last)) {
         result.add(last);
       }
 
