@@ -41,6 +41,7 @@ public class SpeakerBlockBuilder {
     Set<String> knownSpeakers = knownSpeakers(headings);
     String lastSpeaker = "";
     boolean canRecoverNext = false;
+    boolean seenHeading = false;
 
     for (int i = 0; i < lines.size(); i++) {
       String raw = lines.get(i);
@@ -49,8 +50,13 @@ public class SpeakerBlockBuilder {
         continue;
       }
 
+      if (structuralBreak(line)) {
+        seenHeading = false;
+      }
+
       SpeakerHeadingIndex.HeadingRecord heading = headingAt(headings, i);
       if (heading != null) {
+        seenHeading = true;
         Built built = speakerBlock(
           lines,
           headings,
@@ -91,7 +97,9 @@ public class SpeakerBlockBuilder {
         continue;
       }
 
-      blocks.add(unknownBlock(i, line, raw));
+      blocks.add(
+        seenHeading ? unknownBlock(i, line, raw) : openingStage(i, line, raw)
+      );
       canRecoverNext = false;
     }
 
@@ -167,7 +175,9 @@ public class SpeakerBlockBuilder {
       if (line.isEmpty()) {
         continue;
       }
-      if (i != start && !standaloneStage(line)) {
+      boolean insideParen =
+        parenDepth(source.toString()) > 0 && (i - start) <= 8;
+      if (i != start && !insideParen && !standaloneStage(line)) {
         break;
       }
 
@@ -716,6 +726,24 @@ public class SpeakerBlockBuilder {
     );
   }
 
+  private static ParseModels.Block openingStage(
+    int index,
+    String line,
+    String raw
+  ) {
+    return new ParseModels.Block(
+      index,
+      index,
+      "STAGE",
+      line,
+      raw,
+      "LOW",
+      "pre_dialogue_description",
+      ParseModels.BlockType.STAGE_BLOCK,
+      false
+    );
+  }
+
   private static boolean recoverable(
     String line,
     String lastSpeaker,
@@ -814,6 +842,19 @@ public class SpeakerBlockBuilder {
     );
   }
 
+  private static int parenDepth(String text) {
+    int depth = 0;
+    for (int k = 0; k < text.length(); k++) {
+      char c = text.charAt(k);
+      if (c == '(' || c == '[') {
+        depth++;
+      } else if ((c == ')' || c == ']') && depth > 0) {
+        depth--;
+      }
+    }
+    return depth;
+  }
+
   private static boolean bridge(String line) {
     String cleaned = TextNormalizer.norm(line);
     if (cleaned.isEmpty() || boundary(cleaned)) {
@@ -843,6 +884,15 @@ public class SpeakerBlockBuilder {
       StageDetector.location(cleaned) ||
       StageDetector.strong(cleaned, null)
     );
+  }
+
+  private static boolean structuralBreak(String line) {
+    if (boundary(line)) {
+      return true;
+    }
+    return TextNormalizer.norm(line)
+      .toLowerCase()
+      .matches("^scene\\s+[0-9ivx]+\\b.*");
   }
 
   private static boolean majorStageTransition(String line) {
