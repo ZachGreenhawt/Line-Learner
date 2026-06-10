@@ -187,6 +187,14 @@ public class SpeakerDetector {
     if (name.isEmpty() || name.length() > 60) {
       return false;
     }
+    if (
+      CharacterExtractor.BAD_HEADINGS.contains(name) ||
+      CharacterExtractor.BAD_SHORT_LINES.contains(name) ||
+      StageDetector.screenplayScene(raw) ||
+      StageDetector.screenplayTransition(raw)
+    ) {
+      return false;
+    }
     if (name.matches(RegexTerms.CONTAINS_SENTENCE_PUNCT)) {
       return false;
     }

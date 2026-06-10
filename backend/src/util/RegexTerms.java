@@ -168,6 +168,10 @@ public final class RegexTerms {
   public static final String STRUCTURAL_EPISODE =
     "^episode\\s+[a-z0-9ivx -]+.*$";
   public static final String STRUCTURAL_ACT = "^act\\s+[a-z0-9ivx -]+.*$";
+  public static final String SCREENPLAY_SCENE_HEADING =
+    "(?i)^(INT|EXT|I/E|INT/EXT|EST)\\.?\\s+.+$";
+  public static final String SCREENPLAY_TRANSITION =
+    "(?i)^(FADE IN|FADE OUT|CUT TO|DISSOLVE TO|BACK TO|SMASH CUT TO|MATCH CUT TO)\\b.*$";
   public static final String STRUCTURAL_LIGHTS = "^lights?\\b.*$";
   public static final String STRUCTURAL_BLACKOUT = "^blackout\\b.*$";
   public static final String STRUCTURAL_CURTAIN = "^curtain\\b.*$";

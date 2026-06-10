@@ -359,6 +359,8 @@ public class FrontMatterDetector {
       upper.startsWith("LIGHTS ") ||
       upper.startsWith("SOUNDS:") ||
       upper.startsWith("SCENE:") ||
+      StageDetector.screenplayScene(upper) ||
+      StageDetector.screenplayTransition(upper) ||
       upper.startsWith("BEFORE THE CURTAIN") ||
       upper.matches(RegexTerms.EPISODE_HEADING) ||
       upper.matches(RegexTerms.ACT_HEADING) ||

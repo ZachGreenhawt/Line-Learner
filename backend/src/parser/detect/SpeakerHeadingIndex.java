@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import parser.CharacterExtractor;
 import util.RegexTerms;
 import util.TextNormalizer;
 
@@ -778,7 +779,12 @@ public class SpeakerHeadingIndex {
     if (chars != null) {
       for (String ch : chars) {
         String cleaned = TextNormalizer.cleanName(ch);
-        if (!cleaned.isEmpty() && !names.contains(cleaned)) {
+        if (
+          !cleaned.isEmpty() &&
+          !CharacterExtractor.BAD_HEADINGS.contains(cleaned) &&
+          !CharacterExtractor.BAD_SHORT_LINES.contains(cleaned) &&
+          !names.contains(cleaned)
+        ) {
           names.add(cleaned);
         }
       }
@@ -787,7 +793,12 @@ public class SpeakerHeadingIndex {
     if (aliases != null) {
       for (String alias : aliases.keySet()) {
         String cleaned = TextNormalizer.cleanName(alias);
-        if (!cleaned.isEmpty() && !names.contains(cleaned)) {
+        if (
+          !cleaned.isEmpty() &&
+          !CharacterExtractor.BAD_HEADINGS.contains(cleaned) &&
+          !CharacterExtractor.BAD_SHORT_LINES.contains(cleaned) &&
+          !names.contains(cleaned)
+        ) {
           names.add(cleaned);
         }
       }

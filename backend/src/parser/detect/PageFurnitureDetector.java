@@ -112,6 +112,9 @@ public class PageFurnitureDetector {
     if (structural(normalized)) {
       return false;
     }
+    if (spokenFragment(normalized)) {
+      return false;
+    }
 
     return (
       pageNumber(normalized) ||
@@ -160,6 +163,10 @@ public class PageFurnitureDetector {
     DetectionModel model
   ) {
     if (normalized.isEmpty() || structural(normalized)) {
+      return null;
+    }
+
+    if (spokenFragment(normalized)) {
       return null;
     }
 
@@ -410,6 +417,28 @@ public class PageFurnitureDetector {
       upper.matches(RegexTerms.CONTAINS_DRAMA_PRICE) ||
       upper.matches(RegexTerms.CAPS_CAPS_NUMBER_LINE) ||
       publicationPlace(upper)
+    );
+  }
+
+  private static boolean spokenFragment(String line) {
+    String normalized = norm(line);
+    if (normalized.isEmpty()) {
+      return false;
+    }
+
+    if (
+      normalized.matches(RegexTerms.CONTAINS_WWW_CI) ||
+      normalized.matches(RegexTerms.CONTAINS_WEB_TLD_CI) ||
+      normalized.matches(RegexTerms.CONTAINS_ISBN_CI) ||
+      normalized.matches(RegexTerms.CONTAINS_DRAMA_PRICE)
+    ) {
+      return false;
+    }
+
+    String[] words = normalized.split(RegexTerms.WHITESPACE);
+    return (
+      words.length >= 4 &&
+      normalized.matches(RegexTerms.CONTAINS_LOWERCASE)
     );
   }
 

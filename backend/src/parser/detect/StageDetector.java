@@ -295,11 +295,21 @@ public class StageDetector {
 
     return (
       line.isEmpty() ||
+      screenplayScene(line) ||
+      screenplayTransition(line) ||
       up.equals("ACT") ||
       up.equals("SCENE") ||
       up.matches(RegexTerms.ACT_PREFIX) ||
       up.matches(RegexTerms.SCENE_PREFIX)
     );
+  }
+
+  public static boolean screenplayScene(String line) {
+    return TextNormalizer.norm(line).matches(RegexTerms.SCREENPLAY_SCENE_HEADING);
+  }
+
+  public static boolean screenplayTransition(String line) {
+    return TextNormalizer.norm(line).matches(RegexTerms.SCREENPLAY_TRANSITION);
   }
 
   public static boolean junk(String line) {
