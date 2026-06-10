@@ -24,7 +24,7 @@ public class PageRegionExtractor {
 
     geometry.printDebug();
 
-    if (!geometry.likelySpread) {
+    if (!geometry.shouldSplitIntoColumns()) {
       out.add(cropToInk(page));
       return out;
     }
@@ -91,13 +91,15 @@ public class PageRegionExtractor {
 
     System.out.println(
       String.format(
-        "PageRegionExtractor: detected likely side-by-side spread; rotation=%d deg splitX=%d paddingX=%d paddingY=%d order=%s->%s",
+        "PageRegionExtractor: detected likely side-by-side OCR columns; rotation=%d deg splitX=%d paddingX=%d paddingY=%d order=%s->%s spread=%s columns=%s",
         oriented.rotation,
         geometry.gutterX,
         outerPaddingX,
         outerPaddingY,
         halves.get(0).side,
-        halves.get(1).side
+        halves.get(1).side,
+        geometry.likelySpread,
+        geometry.likelyColumns
       )
     );
 
@@ -228,13 +230,13 @@ public class PageRegionExtractor {
         original = candidate;
       }
 
-      if (!geometry.likelySpread) {
+      if (!geometry.shouldSplitIntoColumns()) {
         continue;
       }
 
       if (
         bestSpread == null ||
-        geometry.spreadScore > bestSpread.geometry.spreadScore
+        geometry.columnScore > bestSpread.geometry.columnScore
       ) {
         bestSpread = candidate;
       }
@@ -287,24 +289,34 @@ public class PageRegionExtractor {
       hasTextOnBothSides &&
       gutterMostlyBlank;
 
-    double spreadScore = 0.0;
+    boolean portraitOrPageColumns = aspect > 0.65 && aspect <= 1.15;
+    boolean likelyColumns =
+      portraitOrPageColumns &&
+      gutterNearCenter &&
+      hasTextOnBothSides &&
+      gutterMostlyBlank;
+
+    double columnScore = 0.0;
 
     if (landscapeLike) {
-      spreadScore += 40.0;
+      columnScore += 40.0;
+    }
+    if (portraitOrPageColumns) {
+      columnScore += 25.0;
     }
     if (gutterNearCenter) {
-      spreadScore += 20.0;
+      columnScore += 20.0;
     }
     if (hasTextOnBothSides) {
-      spreadScore += 30.0;
+      columnScore += 30.0;
     }
     if (gutterMostlyBlank) {
-      spreadScore += 30.0;
+      columnScore += 30.0;
     }
 
-    spreadScore += Math.min(leftInk, rightInk) * 200.0;
-    spreadScore -= gutterInk * 300.0;
-    spreadScore -= centerOffset * 100.0;
+    columnScore += Math.min(leftInk, rightInk) * 200.0;
+    columnScore -= gutterInk * 300.0;
+    columnScore -= centerOffset * 100.0;
 
     return new Geometry(
       width,
@@ -312,12 +324,13 @@ public class PageRegionExtractor {
       aspect,
       landscapeLike,
       likelySpread,
+      likelyColumns,
       gutterX,
       gutterInk,
       leftInk,
       rightInk,
       rotation,
-      spreadScore
+      columnScore
     );
   }
 
@@ -536,6 +549,7 @@ public class PageRegionExtractor {
 
     final boolean landscapeLike;
     final boolean likelySpread;
+    final boolean likelyColumns;
 
     final int gutterX;
     final double gutterInk;
@@ -543,7 +557,7 @@ public class PageRegionExtractor {
     final double rightInk;
 
     final int rotation;
-    final double spreadScore;
+    final double columnScore;
 
     Geometry(
       int width,
@@ -551,37 +565,44 @@ public class PageRegionExtractor {
       double aspectRatio,
       boolean landscapeLike,
       boolean likelySpread,
+      boolean likelyColumns,
       int gutterX,
       double gutterInk,
       double leftInk,
       double rightInk,
       int rotation,
-      double spreadScore
+      double columnScore
     ) {
       this.width = width;
       this.height = height;
       this.aspectRatio = aspectRatio;
       this.landscapeLike = landscapeLike;
       this.likelySpread = likelySpread;
+      this.likelyColumns = likelyColumns;
       this.gutterX = gutterX;
       this.gutterInk = gutterInk;
       this.leftInk = leftInk;
       this.rightInk = rightInk;
       this.rotation = rotation;
-      this.spreadScore = spreadScore;
+      this.columnScore = columnScore;
+    }
+
+    boolean shouldSplitIntoColumns() {
+      return likelySpread || likelyColumns;
     }
 
     void printDebug() {
       System.out.println(
         String.format(
-          "Page geometry | rotation=%d deg size=%dx%d aspect=%.2f landscape=%s spread=%s spreadScore=%.2f gutterX=%d gutterInk=%.4f leftInk=%.4f rightInk=%.4f",
+          "Page geometry | rotation=%d deg size=%dx%d aspect=%.2f landscape=%s spread=%s columns=%s columnScore=%.2f gutterX=%d gutterInk=%.4f leftInk=%.4f rightInk=%.4f",
           rotation,
           width,
           height,
           aspectRatio,
           landscapeLike,
           likelySpread,
-          spreadScore,
+          likelyColumns,
+          columnScore,
           gutterX,
           gutterInk,
           leftInk,

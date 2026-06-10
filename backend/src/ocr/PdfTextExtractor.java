@@ -98,11 +98,30 @@ public class PdfTextExtractor {
 
     List<BufferedImage> regions = PageRegionExtractor.regions(pageImage);
 
+    if (regions == null || regions.isEmpty()) {
+      regions = List.of(pageImage);
+    }
+
+    if (regions.size() > 1) {
+      System.out.println(
+        "OCR page " +
+          pageNumber +
+          " split into " +
+          regions.size() +
+          " visual regions"
+      );
+    }
+
     List<OcrResult> results = new ArrayList<>();
 
     for (int regionIndex = 0; regionIndex < regions.size(); regionIndex++) {
+      BufferedImage region = regions.get(regionIndex);
+      if (region == null) {
+        continue;
+      }
+
       OcrResult result = OrientationResolver.result(
-        regions.get(regionIndex),
+        region,
         tesseract,
         pageNumber,
         regionIndex + 1,
@@ -110,7 +129,6 @@ public class PdfTextExtractor {
       );
 
       rememberConfidentOcrTrial(source, store, result);
-
       results.add(result);
     }
 

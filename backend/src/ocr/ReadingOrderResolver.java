@@ -24,11 +24,12 @@ public class ReadingOrderResolver {
       return ordered;
     }
 
-    if (allPrinted(ordered)) {
+    if (allPrinted(ordered) && safeToSortByPrintedPage(ordered)) {
       ordered.sort(
-        Comparator.comparingInt((Region region) ->
-          region.printedPage
-        ).thenComparingInt(region -> region.index)
+        Comparator.comparingInt((Region region) -> region.printedPage)
+          .thenComparingInt(region -> region.page)
+          .thenComparingInt(region -> region.order)
+          .thenComparingInt(region -> region.index)
       );
       return ordered;
     }
@@ -130,6 +131,36 @@ public class ReadingOrderResolver {
       if (region == null || !region.reliablePage()) {
         return false;
       }
+    }
+
+    return true;
+  }
+
+  private static boolean safeToSortByPrintedPage(List<Region> regions) {
+    if (regions == null || regions.size() < 2) {
+      return false;
+    }
+
+    int previousPhysicalPage = -1;
+    int previousPrintedPage = -1;
+
+    for (Region region : regions) {
+      if (region == null || region.source == Source.OCR) {
+        return false;
+      }
+
+      if (previousPhysicalPage >= 0 && region.page < previousPhysicalPage) {
+        return false;
+      }
+
+      if (
+        previousPrintedPage >= 0 && region.printedPage < previousPrintedPage
+      ) {
+        return false;
+      }
+
+      previousPhysicalPage = region.page;
+      previousPrintedPage = region.printedPage;
     }
 
     return true;
