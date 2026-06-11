@@ -166,7 +166,7 @@ public final class RegexTerms {
   public static final String STRUCTURAL_BEFORE_CURTAIN =
     "^before the curtain\\b.*$";
   public static final String STRUCTURAL_EPISODE =
-    "^episode\\s+[a-z0-9ivx -]+.*$";
+    "^episode\\s+[a-z0-9ivx -]+.*$|^moment\\s*:.*$";
   public static final String STRUCTURAL_ACT = "^act\\s+[a-z0-9ivx -]+.*$";
   public static final String SCREENPLAY_SCENE_HEADING =
     "(?i)^(INT|EXT|I/E|INT/EXT|EST)\\.?\\s+.+$";

@@ -250,6 +250,33 @@ public class SpeakerDetector {
     return true;
   }
 
+  private static final Set<String> TITLE_ABBREVIATIONS = Set.of(
+    "MR",
+    "MRS",
+    "MS",
+    "DR",
+    "ST",
+    "SGT",
+    "REV",
+    "FR",
+    "LT",
+    "CAPT",
+    "COL",
+    "GEN",
+    "PROF",
+    "JR",
+    "SR",
+    "DET",
+    "GOV",
+    "SEN",
+    "REP",
+    "MSGR"
+  );
+
+  public static boolean titleAbbreviation(String word) {
+    return TITLE_ABBREVIATIONS.contains(word);
+  }
+
   public static int speakerDot(String line) {
     line = TextNormalizer.norm(line);
 
@@ -259,6 +286,12 @@ public class SpeakerDetector {
       }
 
       String beforeDot = line.substring(0, i);
+      String lastWord = beforeDot
+        .substring(beforeDot.lastIndexOf(' ') + 1)
+        .toUpperCase();
+      if (TITLE_ABBREVIATIONS.contains(lastWord)) {
+        continue;
+      }
       if (CharacterExtractor.heading(beforeDot)) {
         return i;
       }
