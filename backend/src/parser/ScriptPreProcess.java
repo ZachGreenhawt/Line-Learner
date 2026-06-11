@@ -37,13 +37,36 @@ public class ScriptPreProcess {
 
     StringBuilder out = new StringBuilder(normalized.length());
 
+    boolean castRegion = false;
+    boolean castEntry = false;
+    int castRegionLines = 0;
+
     for (int i = 0; i < lines.length; i++) {
       String raw = lines[i] == null ? "" : lines[i];
       if (raw.trim().isEmpty()) {
+        castEntry = false;
         cleanedLines.add("");
         continue;
       }
       String line = scrub(norm(raw));
+
+      String inner = unwrapFurniture(line);
+      if (castRegionHeader(inner)) {
+        castRegion = true;
+        castEntry = false;
+        castRegionLines = 0;
+      } else if (
+        castRegion && (castRegionEnd(inner) || ++castRegionLines > 200)
+      ) {
+        castRegion = false;
+        castEntry = false;
+      }
+      if (castRegion && (castDashLine(inner) || castEntry)) {
+        castEntry = true;
+        cleanedLines.add("");
+        continue;
+      }
+
       if (
         !structural(line) &&
         (junk(line) ||
@@ -74,6 +97,28 @@ public class ScriptPreProcess {
       out.append(cleanedLine).append('\n');
     }
     return out.toString().replaceFirst(RegexTerms.TRAILING_WHITESPACE, "");
+  }
+
+  private static String unwrapFurniture(String line) {
+    return line.replaceAll("</?FURNITURE_CANDIDATE[^>]*>", "").trim();
+  }
+
+  private static boolean castRegionHeader(String line) {
+    return line.matches(
+      "(?i)^(characters|cast of characters|dramatis personae|cast)\\b.{0,30}$"
+    );
+  }
+
+  private static boolean castRegionEnd(String line) {
+    return line.matches(
+      "(?i)^(time|place|setting|act|scene|moment|episode|prologue)\\b.*$"
+    );
+  }
+
+  private static boolean castDashLine(String line) {
+    return line.matches(
+      "^[A-Z][A-Z0-9 .,'\\-]{1,45}\\s+[-–—~]{1,3}\\s+\\S.{3,}$"
+    );
   }
 
   private static boolean dottedLeader(String line) {
