@@ -25,6 +25,8 @@ const finishSession = document.querySelector("#finish-session");
 let currentScript = null;
 let practiceItems = [];
 let practiceIndex = 0;
+let practiceLineStart = 0;
+let practiceSessionStart = 0;
 
 show(form);
 
@@ -226,12 +228,12 @@ checkAnswer.addEventListener("click", () => {
   }
 
   if (answerKey(guess) === answerKey(item.line)) {
-    practiceFeedback.textContent = "Correct.";
+    practiceFeedback.textContent = "Correct." + timedSuffix();
     answerDetails.open = false;
     return;
   }
 
-  practiceFeedback.textContent = "Not quite.";
+  practiceFeedback.textContent = "Not quite." + timedSuffix();
   expectedLine.textContent = item.line;
 });
 
@@ -290,6 +292,7 @@ function cleanList(text) {
 function startPractice(items) {
   practiceItems = Array.isArray(items) ? items : [];
   practiceIndex = 0;
+  practiceSessionStart = Date.now();
   show(practiceSection);
   showPracticeItem();
 }
@@ -314,7 +317,18 @@ function showPracticeItem() {
   expectedLine.textContent = item.line;
   checkAnswer.disabled = false;
   nextLine.disabled = practiceIndex >= practiceItems.length - 1;
+  practiceLineStart = Date.now();
   practiceAnswer.focus();
+}
+
+function timedSuffix() {
+  if (!currentScript?.settings?.timedMode) return "";
+  const lineSeconds = ((Date.now() - practiceLineStart) / 1000).toFixed(1);
+  if (practiceIndex >= practiceItems.length - 1) {
+    const total = ((Date.now() - practiceSessionStart) / 1000).toFixed(1);
+    return ` (${lineSeconds}s — session ${total}s)`;
+  }
+  return ` (${lineSeconds}s)`;
 }
 
 finishSession.addEventListener("click", async () => {
