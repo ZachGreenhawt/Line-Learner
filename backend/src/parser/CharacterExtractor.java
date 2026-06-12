@@ -57,6 +57,9 @@ public class CharacterExtractor {
     "NO",
     "YES",
     "OK",
+    "OLD",
+    "NEW",
+    "END",
     "O.K",
     "WELL",
     "SO",
@@ -295,9 +298,17 @@ public class CharacterExtractor {
       text = "";
     }
 
+    Set<String> headerPrefixes = headerPrefixes(text);
+    List<String> furnitureTexts = new ArrayList<>();
+
     for (String raw : text.split(RegexTerms.NEWLINE)) {
       String line = TextNormalizer.norm(raw);
+      if (PageFurnitureDetector.wrapped(line)) {
+        furnitureTexts.add(PageFurnitureDetector.unwrap(line).toUpperCase());
+        continue;
+      }
       if (
+        headerPrefixLine(line, headerPrefixes) ||
         StageDetector.skip(line) ||
         (StageDetector.junk(line) &&
           !heading(line) &&
@@ -310,8 +321,322 @@ public class CharacterExtractor {
     }
 
     Set<String> chars = keep(counts);
+    chars.removeIf(name -> furnitureVocab(name, counts, furnitureTexts));
     chars.addAll(keepHeadingNames(headingUse));
+
+    Map<String, Integer> usage = garbleUsage(text);
+    for (int pass = 0; pass < 6; pass++) {
+      Set<String> garbles = internalGarbles(chars, usage);
+      if (garbles.isEmpty()) {
+        break;
+      }
+      chars.removeAll(garbles);
+    }
+
     return chars;
+  }
+
+  private static boolean furnitureVocab(
+    String name,
+    Map<String, Integer> counts,
+    List<String> furnitureTexts
+  ) {
+    String clean = TextNormalizer.cleanName(name);
+    if (clean.length() < 4 || counts.getOrDefault(clean, 0) > 15) {
+      return false;
+    }
+
+    java.util.regex.Pattern word = java.util.regex.Pattern.compile(
+      "\\b" + java.util.regex.Pattern.quote(clean) + "\\b"
+    );
+
+    int hits = 0;
+    for (String furniture : furnitureTexts) {
+      if (word.matcher(furniture).find() && ++hits >= 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static final java.util.regex.Pattern HEADER_NUMBER_LINE =
+    java.util.regex.Pattern.compile("^([A-Z][A-Z .'\\-]{2,40}?)\\s+(\\d{1,4})$");
+
+  private static Set<String> headerPrefixes(String text) {
+    Map<String, Set<Integer>> numbersByPrefix = new HashMap<>();
+
+    for (String raw : text.split(RegexTerms.NEWLINE)) {
+      java.util.regex.Matcher m = HEADER_NUMBER_LINE.matcher(
+        TextNormalizer.norm(raw)
+      );
+      if (!m.matches()) {
+        continue;
+      }
+      numbersByPrefix
+        .computeIfAbsent(m.group(1).trim(), k -> new HashSet<>())
+        .add(Integer.parseInt(m.group(2)));
+    }
+
+    Set<String> prefixes = new HashSet<>();
+    for (Map.Entry<String, Set<Integer>> entry : numbersByPrefix.entrySet()) {
+      Set<Integer> numbers = entry.getValue();
+      int min = Integer.MAX_VALUE;
+      for (int n : numbers) {
+        min = Math.min(min, n);
+      }
+      if (numbers.size() >= 4 && min >= 10) {
+        prefixes.add(entry.getKey());
+      }
+    }
+    return prefixes;
+  }
+
+  private static boolean headerPrefixLine(String line, Set<String> prefixes) {
+    if (prefixes.isEmpty()) {
+      return false;
+    }
+    java.util.regex.Matcher m = HEADER_NUMBER_LINE.matcher(line);
+    if (m.matches() && prefixes.contains(m.group(1).trim())) {
+      return true;
+    }
+    for (String prefix : prefixes) {
+      if (line.equals(prefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static Map<String, Integer> garbleUsage(String text) {
+    Map<String, Integer> use = new HashMap<>();
+    if (text == null) {
+      return use;
+    }
+
+    Set<String> headerPrefixes = headerPrefixes(text);
+
+    for (String raw : text.split(RegexTerms.NEWLINE)) {
+      String line = TextNormalizer.norm(raw);
+      if (
+        PageFurnitureDetector.wrapped(line) ||
+        headerPrefixLine(line, headerPrefixes) ||
+        StageDetector.skip(line) ||
+        (StageDetector.junk(line) &&
+          !heading(line) &&
+          castListRole(line).isEmpty())
+      ) {
+        continue;
+      }
+
+      addHeadingUse(use, line);
+
+      if (looseSpeakerCut(line) < 0 && looseHeadingShape(line)) {
+        String name = TextNormalizer.cleanName(line);
+        if (!name.isEmpty()) {
+          use.merge(name, 1, Integer::sum);
+        }
+      }
+    }
+
+    return use;
+  }
+
+  private static Set<String> internalGarbles(
+    Set<String> chars,
+    Map<String, Integer> headingUse
+  ) {
+    Set<String> garbles = new HashSet<>();
+
+    Set<String> cleanChars = new HashSet<>();
+    for (String name : chars) {
+      cleanChars.add(TextNormalizer.cleanName(name));
+    }
+
+    for (String candidate : chars) {
+      String garble = TextNormalizer.cleanName(candidate);
+      if (garble.length() < 4) {
+        continue;
+      }
+
+      String match = uniqueGarbleTarget(
+        garble,
+        headingUse.getOrDefault(garble, 0),
+        cleanChars,
+        headingUse
+      );
+      if (!match.isEmpty()) {
+        garbles.add(candidate);
+      }
+    }
+
+    return garbles;
+  }
+
+  public static Map<String, String> garbleAliases(
+    String text,
+    Set<String> canonical
+  ) {
+    Map<String, String> aliases = new HashMap<>();
+    if (text == null || canonical == null || canonical.isEmpty()) {
+      return aliases;
+    }
+
+    Map<String, Integer> headingUse = garbleUsage(text);
+
+    Set<String> cleanCanonical = new HashSet<>();
+    for (String name : canonical) {
+      cleanCanonical.add(TextNormalizer.cleanName(name));
+    }
+
+    for (Map.Entry<String, Integer> entry : headingUse.entrySet()) {
+      String garble = entry.getKey();
+      if (garble.length() < 4) {
+        continue;
+      }
+
+      if (cleanCanonical.contains(garble)) {
+        String parent = uniqueVariantParent(
+          garble,
+          entry.getValue(),
+          cleanCanonical,
+          headingUse
+        );
+        if (!parent.isEmpty()) {
+          aliases.put(garble, parent);
+        }
+        continue;
+      }
+
+      String match = uniqueGarbleTarget(
+        garble,
+        entry.getValue(),
+        cleanCanonical,
+        headingUse
+      );
+      if (!match.isEmpty()) {
+        aliases.put(garble, match);
+      }
+    }
+
+    return aliases;
+  }
+
+  private static String uniqueVariantParent(
+    String variant,
+    int variantUse,
+    Set<String> canonical,
+    Map<String, Integer> headingUse
+  ) {
+    String match = "";
+    for (String name : canonical) {
+      if (name.equals(variant)) {
+        continue;
+      }
+      if (!firstWordOf(variant, name) && !lastWordOf(variant, name)) {
+        continue;
+      }
+      if (!match.isEmpty()) {
+        return "";
+      }
+      match = name;
+    }
+
+    if (match.isEmpty()) {
+      return "";
+    }
+
+    int parentUse = headingUse.getOrDefault(match, 0);
+    if (parentUse < Math.max(3, 2 * variantUse)) {
+      return "";
+    }
+
+    return match;
+  }
+
+  private static String uniqueGarbleTarget(
+    String garble,
+    int garbleUse,
+    Set<String> canonical,
+    Map<String, Integer> headingUse
+  ) {
+    String match = "";
+    boolean firstWordMatch = false;
+    for (String name : canonical) {
+      if (name.equals(garble)) {
+        continue;
+      }
+      boolean firstWord =
+        firstWordOf(garble, name) || lastWordOf(garble, name);
+      if (!garbleOf(garble, name) && !firstWord) {
+        continue;
+      }
+      if (!match.isEmpty()) {
+        return "";
+      }
+      match = name;
+      firstWordMatch = firstWord;
+    }
+
+    if (match.isEmpty()) {
+      return "";
+    }
+
+    int canonicalUse = headingUse.getOrDefault(match, 0);
+    int required = firstWordMatch ? 3 : Math.max(3, 3 * garbleUse);
+    if (canonicalUse < required) {
+      return "";
+    }
+
+    return match;
+  }
+
+  private static boolean firstWordOf(String word, String name) {
+    if (word.length() < 4 || word.contains(" ")) {
+      return false;
+    }
+    int space = name.indexOf(' ');
+    return space > 0 && name.substring(0, space).equals(word);
+  }
+
+  private static boolean lastWordOf(String word, String name) {
+    if (word.length() < 4 || word.contains(" ")) {
+      return false;
+    }
+    int space = name.lastIndexOf(' ');
+    return space > 0 && name.substring(space + 1).equals(word);
+  }
+
+  private static boolean garbleOf(String garble, String name) {
+    if (
+      garble.isEmpty() ||
+      name.isEmpty() ||
+      garble.equals(name) ||
+      name.length() < garble.length() ||
+      name.length() - garble.length() > 5
+    ) {
+      return false;
+    }
+
+    if (name.length() == garble.length()) {
+      return withinOneEdit(garble, name);
+    }
+
+    String prefix = name.substring(0, garble.length());
+    String suffix = name.substring(name.length() - garble.length());
+    return withinOneEdit(garble, prefix) || withinOneEdit(garble, suffix);
+  }
+
+  private static boolean withinOneEdit(String a, String b) {
+    if (a.length() != b.length()) {
+      return false;
+    }
+    int diff = 0;
+    for (int i = 0; i < a.length(); i++) {
+      if (a.charAt(i) != b.charAt(i) && ++diff > 1) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static final int HEADING_USE_MIN = 2;
@@ -792,7 +1117,7 @@ public class CharacterExtractor {
       !actorName(name) &&
       !headerOrFooter(name) &&
       !repeated(name) &&
-      !combinedName(name, counts) &&
+      !combinedName(name, count, counts) &&
       !subsumedByStrongerName(name, count, counts) &&
       !bareNumberOrShort(name)
     );
@@ -1039,6 +1364,7 @@ public class CharacterExtractor {
 
   private static boolean combinedName(
     String name,
+    int count,
     Map<String, Integer> counts
   ) {
     String[] words = TextNormalizer.cleanName(name).split(
@@ -1048,6 +1374,8 @@ public class CharacterExtractor {
       return false;
     }
 
+    int required = Math.max(2, count);
+
     for (int cut = 1; cut < words.length; cut++) {
       String left = String.join(" ", Arrays.copyOfRange(words, 0, cut));
       String right = String.join(
@@ -1055,7 +1383,10 @@ public class CharacterExtractor {
         Arrays.copyOfRange(words, cut, words.length)
       );
 
-      if (counts.containsKey(left) && counts.containsKey(right)) {
+      if (
+        counts.getOrDefault(left, 0) >= required &&
+        counts.getOrDefault(right, 0) >= required
+      ) {
         return true;
       }
     }
