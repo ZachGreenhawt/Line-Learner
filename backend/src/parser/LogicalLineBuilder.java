@@ -31,6 +31,18 @@ public class LogicalLineBuilder {
         continue;
       }
 
+      if (i + 1 < rawLines.size()) {
+        String[] moved = splitTrailingHeadingFragment(
+          line,
+          rawLines.get(i + 1),
+          chars
+        );
+        if (moved != null) {
+          line = moved[0];
+          rawLines.set(i + 1, moved[1]);
+        }
+      }
+
       if (SpeakerDetector.heading(line, chars)) {
         if (hasEmbeddedTurnAfterStart(line, chars)) {
           out.addAll(explodeEmbeddedTurns(line, chars));
@@ -101,6 +113,74 @@ public class LogicalLineBuilder {
     }
 
     return out;
+  }
+
+  private static String[] splitTrailingHeadingFragment(
+    String line,
+    String next,
+    Set<String> chars
+  ) {
+    if (chars == null || chars.isEmpty()) {
+      return null;
+    }
+
+    String t = TextNormalizer.norm(line);
+    String n = TextNormalizer.norm(next);
+    if (t.length() < 12 || n.isEmpty()) {
+      return null;
+    }
+
+    for (String name : CharacterExtractor.sortedNamesByLength(chars)) {
+      String clean = TextNormalizer.cleanName(name);
+      String[] words = clean.split(RegexTerms.WHITESPACE);
+      if (words.length < 2) {
+        continue;
+      }
+
+      for (int cut = 1; cut < words.length; cut++) {
+        String prefix = String.join(
+          " ",
+          Arrays.copyOfRange(words, 0, cut)
+        );
+        String remaining = String.join(
+          " ",
+          Arrays.copyOfRange(words, cut, words.length)
+        );
+
+        if (
+          prefix.length() < 4 ||
+          !t.endsWith(" " + prefix) ||
+          !n.regionMatches(true, 0, remaining, 0, remaining.length()) ||
+          !SpeakerDetector.allCapsAt(t, t.length() - prefix.length(), prefix) ||
+          !SpeakerDetector.allCapsAt(n, 0, remaining)
+        ) {
+          continue;
+        }
+
+        if (
+          n.length() > remaining.length() &&
+          !validCharacterBoundary(n, remaining.length())
+        ) {
+          continue;
+        }
+
+        String before = t
+          .substring(0, t.length() - prefix.length())
+          .strip();
+        if (before.length() < 8) {
+          continue;
+        }
+        char last = before.charAt(before.length() - 1);
+        if (last != '.' && last != '!' && last != '?' && last != '"' &&
+            last != '”' && last != ')') {
+          continue;
+        }
+
+        return new String[] { before, prefix + " " + n };
+      }
+    }
+
+    return null;
   }
 
   private static String[] splitTrailingHeading(

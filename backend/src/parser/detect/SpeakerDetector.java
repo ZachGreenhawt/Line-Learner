@@ -111,7 +111,11 @@ public class SpeakerDetector {
           break;
         }
 
-        if (index >= from && match(line, index, clean, chars)) {
+        if (
+          index >= from &&
+          match(line, index, clean, chars) &&
+          !coveredByLongerName(line, index, clean, chars)
+        ) {
           best = best < 0 ? index : Math.min(best, index);
           break;
         }
@@ -121,6 +125,41 @@ public class SpeakerDetector {
     }
 
     return best;
+  }
+
+  private static boolean coveredByLongerName(
+    String line,
+    int index,
+    String name,
+    Set<String> chars
+  ) {
+    String upper = line.toUpperCase();
+    int end = index + name.length();
+
+    for (String other : chars) {
+      String clean = TextNormalizer.cleanName(other);
+      if (clean.length() <= name.length() || clean.equals(name)) {
+        continue;
+      }
+
+      int search = 0;
+      while (search <= index) {
+        int at = upper.indexOf(clean, search);
+        if (at < 0 || at > index) {
+          break;
+        }
+        if (
+          at + clean.length() >= end &&
+          allCapsAt(line, at, clean) &&
+          beforeBoundary(line, at)
+        ) {
+          return true;
+        }
+        search = at + 1;
+      }
+    }
+
+    return false;
   }
 
   public static boolean match(

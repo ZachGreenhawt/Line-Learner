@@ -56,13 +56,20 @@ public class ScriptPreProcess {
         castEntry = false;
         castRegionLines = 0;
       } else if (
-        castRegion && (castRegionEnd(inner) || ++castRegionLines > 200)
+        castRegion &&
+        (castRegionEnd(inner) ||
+          proseLine(inner) ||
+          ++castRegionLines > 200)
       ) {
         castRegion = false;
         castEntry = false;
       }
       if (castRegion && (castDashLine(inner) || castEntry)) {
         castEntry = true;
+        cleanedLines.add("");
+        continue;
+      }
+      if (castRegion && castNameLine(inner)) {
         cleanedLines.add("");
         continue;
       }
@@ -111,7 +118,8 @@ public class ScriptPreProcess {
 
   private static boolean castRegionEnd(String line) {
     return line.matches(
-      "(?i)^(time|place|setting|act|scene|moment|episode|prologue)\\b.*$"
+      "(?i)^(time|place|setting|act|scene|moment|episode|prologue|" +
+      "at rise|at the rise|before the curtain|lights)\\b.*$"
     );
   }
 
@@ -119,6 +127,59 @@ public class ScriptPreProcess {
     return line.matches(
       "^[A-Z][A-Z0-9 .,'\\-]{1,45}\\s+[-–—~]{1,3}\\s+\\S.{3,}$"
     );
+  }
+
+  private static boolean proseLine(String line) {
+    if (line.length() < 45) {
+      return false;
+    }
+    boolean lower = false;
+    for (int i = 0; i < line.length(); i++) {
+      if (Character.isLowerCase(line.charAt(i))) {
+        lower = true;
+        break;
+      }
+    }
+    return (
+      lower &&
+      (line.endsWith(".") ||
+        line.endsWith("!") ||
+        line.endsWith("?") ||
+        line.endsWith("\"") ||
+        line.contains(". "))
+    );
+  }
+
+  private static final java.util.Set<String> CAST_CONNECTORS =
+    java.util.Set.of("at", "of", "for", "the", "and", "in", "on", "with");
+
+  private static boolean castNameLine(String line) {
+    if (line.isEmpty() || line.length() > 40) {
+      return false;
+    }
+    if (line.endsWith(".") || line.endsWith("?") || line.endsWith("!")) {
+      return false;
+    }
+
+    String[] tokens = line.split("\\s*/\\s*|\\s+");
+    if (tokens.length < 1 || tokens.length > 6) {
+      return false;
+    }
+
+    int capitalized = 0;
+    for (String token : tokens) {
+      if (token.isEmpty()) {
+        return false;
+      }
+      char first = token.charAt(0);
+      if (Character.isUpperCase(first) || Character.isDigit(first)) {
+        capitalized++;
+      } else if (!CAST_CONNECTORS.contains(token)) {
+        return false;
+      }
+    }
+
+    return capitalized >= 1;
   }
 
   private static boolean dottedLeader(String line) {

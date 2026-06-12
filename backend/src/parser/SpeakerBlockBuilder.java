@@ -332,18 +332,13 @@ public class SpeakerBlockBuilder {
         break;
       }
 
-      String recovered = leadingStageTailDialogue(line);
-      if (
-        !recovered.isEmpty() &&
-        previousSpeaker != null &&
-        !previousSpeaker.isBlank() &&
-        !sameSpeaker(previousSpeaker, heading.canonicalSpeaker)
-      ) {
-        extras.add(recoveredStageTailBlock(i, previousSpeaker, recovered, raw));
-        reason = appendReason(reason, "split_leading_stage_tail_dialogue");
+      String tailDialogue = leadingStageTailDialogue(line);
+      if (!tailDialogue.isEmpty()) {
+        appendSource(source, raw);
+        appendSpace(text, tailDialogue);
+        reason = appendReason(reason, "leading_stage_tail_kept");
         end = i;
-        lastSpeaker = previousSpeaker;
-        break;
+        continue;
       }
 
       boolean hasText = text.length() > 0;
