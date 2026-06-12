@@ -99,6 +99,10 @@ public class HybridTextExtraction {
     "i'm"
   );
 
+  public static java.util.Set<String> stageHintKeys() {
+    return NativeColumnTextExtractor.stageHintKeys();
+  }
+
   public static Result extract(File pdf, Ocr ocr) throws Exception {
     List<Page> pages = nativePages(pdf);
 

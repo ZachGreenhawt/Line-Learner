@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
@@ -20,7 +21,7 @@ public class ScriptLoader {
 
   private static final boolean USE_EXTRACTED_TEXT_CACHE = true;
   private static final String EXTRACTION_PIPELINE_VERSION =
-    "pdf-ocr-v7-column-bands";
+    "pdf-ocr-v8-indent-hints";
 
   private static final Set<String> IMAGE_EXTENSIONS = Set.of(
     ".jpg",
@@ -156,6 +157,12 @@ public class ScriptLoader {
     return readCached(script, session, name, () -> image(script));
   }
 
+  private static Set<String> lastStageHintKeys = new HashSet<>();
+
+  public static Set<String> stageHintKeys() {
+    return lastStageHintKeys;
+  }
+
   private static String readCached(
     File script,
     ParserSessionStore session,
@@ -163,20 +170,48 @@ public class ScriptLoader {
     Supplier<String> extractor
   ) {
     if (!USE_EXTRACTED_TEXT_CACHE) {
-      return extractor.get();
+      String text = extractor.get();
+      lastStageHintKeys = PdfTextExtractor.stageHintKeys();
+      return text;
     }
 
     Path metaFile = session.textCsv().resolveSibling("extracted_text.meta");
+    Path hintsFile = session.textCsv().resolveSibling("stage_hints.txt");
     String expectedMeta = meta(script, name);
 
     String cached = readCache(session, metaFile, expectedMeta);
     if (!cached.isEmpty()) {
+      lastStageHintKeys = loadHintKeys(hintsFile);
       return cached;
     }
 
     String text = extractor.get();
+    lastStageHintKeys = PdfTextExtractor.stageHintKeys();
     writeCache(session, metaFile, expectedMeta, text);
+    saveHintKeys(hintsFile, lastStageHintKeys);
     return text;
+  }
+
+  private static Set<String> loadHintKeys(Path hintsFile) {
+    try {
+      if (!Files.exists(hintsFile)) {
+        return new HashSet<>();
+      }
+      return new HashSet<>(Files.readAllLines(hintsFile));
+    } catch (IOException e) {
+      return new HashSet<>();
+    }
+  }
+
+  private static void saveHintKeys(Path hintsFile, Set<String> keys) {
+    try {
+      Files.writeString(
+        hintsFile,
+        keys == null || keys.isEmpty() ? "" : String.join("\n", keys)
+      );
+    } catch (IOException e) {
+      System.out.println("Could not save stage hints: " + e.getMessage());
+    }
   }
 
   private static String readCache(

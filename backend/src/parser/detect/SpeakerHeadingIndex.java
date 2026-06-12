@@ -709,12 +709,28 @@ public class SpeakerHeadingIndex {
 
     out = TextNormalizer.stripLeadingParentheticals(out);
 
-    while (startsWithHeadingPunctuation(out)) {
+    while (startsWithHeadingPunctuation(out) || startsWithStrayQuote(out)) {
       out = TextNormalizer.norm(out.substring(1));
       out = TextNormalizer.stripLeadingParentheticals(out);
     }
 
     return out;
+  }
+
+  private static boolean startsWithStrayQuote(String text) {
+    if (text.isEmpty()) {
+      return false;
+    }
+    char first = text.charAt(0);
+    return (
+      first == '\'' ||
+      first == '"' ||
+      first == '‘' ||
+      first == '’' ||
+      first == '“' ||
+      first == '”' ||
+      first == '`'
+    );
   }
 
   private static boolean looksLikeStageOnlyContinuation(String text) {
@@ -1044,6 +1060,15 @@ public class SpeakerHeadingIndex {
 
     if (
       cleaned.contains("?") || cleaned.contains("!") || cleaned.contains("\"")
+    ) {
+      return false;
+    }
+
+    if (
+      cleaned.matches(
+        "^(Is|Are|Am|Was|Were|Do|Does|Did|Has|Have|Had|Will|Would|" +
+        "Can|Could|Should|Shall|May|Might|Must)\\b.*"
+      )
     ) {
       return false;
     }

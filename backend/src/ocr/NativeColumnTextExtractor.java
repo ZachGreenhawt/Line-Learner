@@ -4,10 +4,13 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
+import parser.detect.StageHints;
 
 class NativeColumnTextExtractor {
 
@@ -19,7 +22,26 @@ class NativeColumnTextExtractor {
   private static final float BAND_LINE_GAP = 40f;
   private static final float MIN_CORRIDOR_WIDTH = 8f;
 
+  private static final float HINT_MIN_INDENT = 10f;
+  private static final float HINT_MAX_INDENT = 70f;
+  private static final int HINT_BUCKET_PT = 3;
+  private static final int HINT_MIN_PAGE_LINES = 8;
+
+  private static final java.util.Set<String> docHintKeys =
+    new java.util.HashSet<>();
+  private static final java.util.Set<String> docPlainKeys =
+    new java.util.HashSet<>();
+
+  static java.util.Set<String> stageHintKeys() {
+    java.util.Set<String> keys = new java.util.HashSet<>(docHintKeys);
+    keys.removeAll(docPlainKeys);
+    return keys;
+  }
+
   static List<HybridTextExtraction.Page> pages(File pdf) throws Exception {
+    docHintKeys.clear();
+    docPlainKeys.clear();
+
     if (pdf == null || !pdf.exists()) {
       return List.of();
     }
@@ -43,6 +65,8 @@ class NativeColumnTextExtractor {
             "Native column bands adopted on page " + pageNumber
           );
           best = columns;
+        } else if (columns == null) {
+          collectHintKeys(document, pageNumber, best);
         }
 
         pages.add(
@@ -80,6 +104,13 @@ class NativeColumnTextExtractor {
       "(?im)^\\s*(characters|cast of characters|cast|dramatis personae)\\b.{0,20}$"
     );
 
+  private static final java.util.regex.Pattern FRONT_MATTER_PAGE =
+    java.util.regex.Pattern.compile(
+      "(?i)\\b(copyright|all rights reserved|isbn|premiere[d]?|directed by|" +
+      "produced by|published|playwright|theatre company|artistic director|" +
+      "characters|cast of characters|dramatis personae|acknowledg)\\b"
+    );
+
   private static Extracted columnBands(PDDocument document, int pageNumber) {
     try {
       float pageWidth = document
@@ -103,11 +134,243 @@ class NativeColumnTextExtractor {
       if (CAST_PAGE.matcher(text).find()) {
         return null;
       }
+      collectColumnHintKeys(lines, gutterX, text);
       String cleaned = TextExtractionQualityScorer.cleanText(text);
       return new Extracted(cleaned, TextExtractionQualityScorer.score(cleaned));
     } catch (Exception e) {
       return null;
     }
+  }
+
+  private static void collectColumnHintKeys(
+    List<Line> lines,
+    float gutterX,
+    String pageText
+  ) {
+    if (FRONT_MATTER_PAGE.matcher(pageText).find()) {
+      return;
+    }
+
+    List<SideLine> sideLines = new ArrayList<>();
+    for (Line line : lines) {
+      splitSide(line, gutterX, true, sideLines);
+      splitSide(line, gutterX, false, sideLines);
+    }
+
+    Float leftBase = sideBaseX(sideLines, true);
+    Float rightBase = sideBaseX(sideLines, false);
+
+    for (SideLine side : sideLines) {
+      Float base = side.left ? leftBase : rightBase;
+      if (base == null) {
+        continue;
+      }
+
+      String key = StageHints.key(side.text);
+      if (key.isEmpty()) {
+        continue;
+      }
+
+      float indent = side.startX - base;
+      boolean hint =
+        indent >= HINT_MIN_INDENT &&
+        indent <= HINT_MAX_INDENT &&
+        hasLowercase(side.text) &&
+        !side.text.startsWith("(");
+
+      if (hint) {
+        docHintKeys.add(key);
+      } else {
+        docPlainKeys.add(key);
+      }
+    }
+  }
+
+  private static void splitSide(
+    Line line,
+    float gutterX,
+    boolean left,
+    List<SideLine> out
+  ) {
+    StringBuilder text = new StringBuilder();
+    float startX = Float.MAX_VALUE;
+
+    for (Span span : line.spans) {
+      if (span.x0 < gutterX && span.x1 > gutterX) {
+        return;
+      }
+      boolean spanLeft = span.x1 <= gutterX;
+      if (spanLeft != left) {
+        continue;
+      }
+      if (!text.isEmpty()) {
+        text.append(' ');
+      }
+      text.append(span.text);
+      startX = Math.min(startX, span.x0);
+    }
+
+    String joined = text.toString().trim();
+    if (!joined.isEmpty()) {
+      out.add(new SideLine(joined, startX, left));
+    }
+  }
+
+  private static Float sideBaseX(List<SideLine> sideLines, boolean left) {
+    Map<Integer, Integer> buckets = new TreeMap<>();
+    Map<Integer, Float> bucketMinX = new TreeMap<>();
+    int total = 0;
+
+    for (SideLine side : sideLines) {
+      if (side.left != left) {
+        continue;
+      }
+      total++;
+      int bucket = (int) (side.startX / HINT_BUCKET_PT);
+      buckets.merge(bucket, 1, Integer::sum);
+      bucketMinX.merge(bucket, side.startX, Math::min);
+    }
+
+    if (total < HINT_MIN_PAGE_LINES) {
+      return null;
+    }
+
+    int threshold = Math.max(4, (int) (total * 0.15));
+
+    for (Map.Entry<Integer, Integer> entry : buckets.entrySet()) {
+      int count = entry.getValue();
+      count += buckets.getOrDefault(entry.getKey() + 1, 0);
+      if (count >= threshold) {
+        return bucketMinX.get(entry.getKey());
+      }
+    }
+
+    return null;
+  }
+
+  private static class SideLine {
+
+    final String text;
+    final float startX;
+    final boolean left;
+
+    SideLine(String text, float startX, boolean left) {
+      this.text = text;
+      this.startX = startX;
+      this.left = left;
+    }
+  }
+
+  private static void collectHintKeys(
+    PDDocument document,
+    int pageNumber,
+    Extracted best
+  ) {
+    try {
+      if (best == null || best.text.isBlank()) {
+        return;
+      }
+
+      float pageWidth = document
+        .getPage(pageNumber - 1)
+        .getMediaBox()
+        .getWidth();
+
+      List<Span> spans = collectSpans(document, pageNumber, pageWidth);
+      List<Line> lines = groupLines(spans);
+      if (lines.size() < HINT_MIN_PAGE_LINES) {
+        return;
+      }
+
+      Float base = dialogueBaseX(lines);
+      if (base == null) {
+        return;
+      }
+
+      boolean frontMatter = FRONT_MATTER_PAGE.matcher(best.text).find();
+
+      for (Line line : lines) {
+        String text = joinedText(line);
+        if (text.isEmpty()) {
+          continue;
+        }
+
+        float indent = lineStartX(line) - base;
+        boolean hint =
+          !frontMatter &&
+          indent >= HINT_MIN_INDENT &&
+          indent <= HINT_MAX_INDENT &&
+          hasLowercase(text) &&
+          !text.startsWith("(");
+
+        String key = StageHints.key(text);
+        if (key.isEmpty()) {
+          continue;
+        }
+        if (hint) {
+          docHintKeys.add(key);
+        } else {
+          docPlainKeys.add(key);
+        }
+      }
+    } catch (Exception e) {
+      // best-effort: a page without hints is always safe
+    }
+  }
+
+  private static Float dialogueBaseX(List<Line> lines) {
+    Map<Integer, Integer> buckets = new TreeMap<>();
+    Map<Integer, Float> bucketMinX = new TreeMap<>();
+
+    for (Line line : lines) {
+      if (joinedText(line).isEmpty()) {
+        continue;
+      }
+      float x = lineStartX(line);
+      int bucket = (int) (x / HINT_BUCKET_PT);
+      buckets.merge(bucket, 1, Integer::sum);
+      bucketMinX.merge(bucket, x, Math::min);
+    }
+
+    int threshold = Math.max(4, (int) (lines.size() * 0.15));
+
+    for (Map.Entry<Integer, Integer> entry : buckets.entrySet()) {
+      int count = entry.getValue();
+      count += buckets.getOrDefault(entry.getKey() + 1, 0);
+      if (count >= threshold) {
+        return bucketMinX.get(entry.getKey());
+      }
+    }
+
+    return null;
+  }
+
+  private static float lineStartX(Line line) {
+    float x = Float.MAX_VALUE;
+    for (Span span : line.spans) {
+      x = Math.min(x, span.x0);
+    }
+    return x;
+  }
+
+  private static String joinedText(Line line) {
+    StringBuilder text = new StringBuilder();
+    for (Span span : line.spans) {
+      if (!text.isEmpty()) {
+        text.append(' ');
+      }
+      text.append(span.text);
+    }
+    return text.toString().trim();
+  }
+
+  private static boolean hasLowercase(String text) {
+    for (int i = 0; i < text.length(); i++) {
+      if (Character.isLowerCase(text.charAt(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static String rebuild(List<Line> lines, List<Band> bands) {

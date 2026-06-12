@@ -17,11 +17,17 @@ public class LogicalLineBuilder {
     }
 
     List<String> rawLines = normalizedNonEmptyLines(scriptText);
+    Set<String> hintKeys = ScriptLoader.stageHintKeys();
 
     for (int i = 0; i < rawLines.size(); i++) {
       String line = rawLines.get(i);
 
       if (shouldDropLogicalLine(line, chars)) {
+        continue;
+      }
+
+      if (!hintKeys.isEmpty() && hintKeys.contains(StageHints.key(line))) {
+        out.add(line);
         continue;
       }
 
@@ -53,11 +59,6 @@ public class LogicalLineBuilder {
           continue;
         }
 
-        if (SpeakerDetector.heading(nextLine, chars)) {
-          out.add(line);
-          continue;
-        }
-
         String joinedBrokenSpeaker = joinBrokenSpeaker(line, nextLine, chars);
         if (!joinedBrokenSpeaker.isEmpty()) {
           out.add(joinedBrokenSpeaker);
@@ -76,6 +77,11 @@ public class LogicalLineBuilder {
           continue;
         }
 
+        if (SpeakerDetector.heading(nextLine, chars)) {
+          out.add(line);
+          continue;
+        }
+
         String merged = mergeSplitSpeakerLine(line, nextLine, chars);
         if (!merged.isEmpty()) {
           out.addAll(explodeEmbeddedTurns(merged, chars));
@@ -84,10 +90,58 @@ public class LogicalLineBuilder {
         }
       }
 
+      String[] trailing = splitTrailingHeading(line, chars);
+      if (trailing != null) {
+        out.addAll(explodeEmbeddedTurns(trailing[0], chars));
+        out.add(trailing[1]);
+        continue;
+      }
+
       out.addAll(explodeEmbeddedTurns(line, chars));
     }
 
     return out;
+  }
+
+  private static String[] splitTrailingHeading(
+    String line,
+    Set<String> chars
+  ) {
+    if (chars == null || chars.isEmpty()) {
+      return null;
+    }
+
+    String t = TextNormalizer.norm(line);
+    if (t.length() < 12) {
+      return null;
+    }
+
+    for (String name : CharacterExtractor.sortedNamesByLength(chars)) {
+      String clean = TextNormalizer.cleanName(name);
+      if (clean.length() < 4 || !t.endsWith(clean)) {
+        continue;
+      }
+
+      int start = t.length() - clean.length();
+      if (!SpeakerDetector.allCapsAt(t, start, clean)) {
+        continue;
+      }
+
+      String before = t.substring(0, start).strip();
+      if (before.length() < 8) {
+        return null;
+      }
+
+      char last = before.charAt(before.length() - 1);
+      if (last != '.' && last != '!' && last != '?' && last != '"' &&
+          last != '”' && last != ')') {
+        return null;
+      }
+
+      return new String[] { before, clean };
+    }
+
+    return null;
   }
 
   private static List<String> normalizedNonEmptyLines(String scriptText) {
@@ -530,6 +584,15 @@ public class LogicalLineBuilder {
     }
 
     String cleaned = rest.strip();
+
+    if (cleaned.startsWith("(") || cleaned.startsWith("[")) {
+      String stripped = TextNormalizer.stripLeadingParentheticals(cleaned);
+      if (stripped.startsWith(".") || stripped.startsWith(":")) {
+        return cleaned;
+      }
+      return null;
+    }
+
     if (stageOrParentheticalStart(cleaned)) {
       return null;
     }

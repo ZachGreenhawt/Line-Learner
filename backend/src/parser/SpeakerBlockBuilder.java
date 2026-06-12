@@ -33,6 +33,15 @@ public class SpeakerBlockBuilder {
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings,
     Set<String> chars
   ) {
+    return build(lines, headings, chars, null);
+  }
+
+  public static List<ParseModels.Block> build(
+    List<String> lines,
+    Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings,
+    Set<String> chars,
+    boolean[] stageHints
+  ) {
     List<ParseModels.Block> blocks = new ArrayList<>();
     if (lines == null || lines.isEmpty()) {
       return blocks;
@@ -52,6 +61,25 @@ public class SpeakerBlockBuilder {
 
       if (structuralBreak(line)) {
         seenHeading = false;
+      }
+
+      if (hintAt(stageHints, i)) {
+        BuiltStage built = stageBlock(
+          lines,
+          headings,
+          knownSpeakers,
+          i,
+          stageHints
+        );
+        blocks.add(built.block);
+
+        if (!built.mentionedSpeaker.isEmpty()) {
+          lastSpeaker = built.mentionedSpeaker;
+        }
+
+        canRecoverNext = false;
+        i = built.endIndex;
+        continue;
       }
 
       SpeakerHeadingIndex.HeadingRecord heading = headingAt(headings, i);
@@ -79,7 +107,13 @@ public class SpeakerBlockBuilder {
       }
 
       if (standaloneStage(line)) {
-        BuiltStage built = stageBlock(lines, headings, knownSpeakers, i);
+        BuiltStage built = stageBlock(
+          lines,
+          headings,
+          knownSpeakers,
+          i,
+          stageHints
+        );
         blocks.add(built.block);
 
         if (!built.mentionedSpeaker.isEmpty()) {
@@ -154,11 +188,16 @@ public class SpeakerBlockBuilder {
     return headings == null ? null : headings.get(index);
   }
 
+  private static boolean hintAt(boolean[] hints, int index) {
+    return hints != null && index >= 0 && index < hints.length && hints[index];
+  }
+
   private static BuiltStage stageBlock(
     List<String> lines,
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings,
     Set<String> knownSpeakers,
-    int start
+    int start,
+    boolean[] stageHints
   ) {
     StringBuilder text = new StringBuilder();
     StringBuilder source = new StringBuilder();
@@ -166,7 +205,9 @@ public class SpeakerBlockBuilder {
     int end = start;
 
     for (int i = start; i < lines.size(); i++) {
-      if (i != start && headingAt(headings, i) != null) {
+      if (
+        i != start && headingAt(headings, i) != null && !hintAt(stageHints, i)
+      ) {
         break;
       }
 
@@ -177,7 +218,12 @@ public class SpeakerBlockBuilder {
       }
       boolean insideParen =
         parenDepth(source.toString()) > 0 && (i - start) <= 8;
-      if (i != start && !insideParen && !standaloneStage(line)) {
+      if (
+        i != start &&
+        !insideParen &&
+        !standaloneStage(line) &&
+        !hintAt(stageHints, i)
+      ) {
         break;
       }
 
@@ -204,7 +250,10 @@ public class SpeakerBlockBuilder {
       if (line.isEmpty()) {
         continue;
       }
-      if (!wrappedStageContinuation(text.toString(), line)) {
+      if (
+        !wrappedStageContinuation(text.toString(), line) &&
+        !hintAt(stageHints, j)
+      ) {
         break;
       }
       appendSpace(text, line);
@@ -223,7 +272,9 @@ public class SpeakerBlockBuilder {
       text.toString().trim(),
       source.toString().trim(),
       "HIGH",
-      start == end ? "stage_block" : "stage_block_accumulated",
+      hintAt(stageHints, start)
+        ? "stage_block_layout_indent"
+        : (start == end ? "stage_block" : "stage_block_accumulated"),
       ParseModels.BlockType.STAGE_BLOCK,
       true
     );
@@ -297,6 +348,17 @@ public class SpeakerBlockBuilder {
 
       boolean hasText = text.length() > 0;
       LineRole role = roleFor(line, hasText, mode);
+      if (
+        role == LineRole.SOURCE_ONLY &&
+        hasText &&
+        !line.isEmpty() &&
+        Character.isLowerCase(line.charAt(0)) &&
+        !TextNormalizer.norm(text.toString()).matches(
+          RegexTerms.ENDS_WITH_SENTENCE
+        )
+      ) {
+        role = LineRole.TEXT;
+      }
       if (role == LineRole.BOUNDARY) {
         break;
       }
@@ -537,7 +599,28 @@ public class SpeakerBlockBuilder {
   ) {
     String acc = TextNormalizer.norm(accumulated);
     String nxt = TextNormalizer.norm(next);
-    if (nxt.isEmpty() || nxt.length() > 60) {
+    if (nxt.isEmpty()) {
+      return false;
+    }
+
+    if (
+      !acc.matches(RegexTerms.ENDS_WITH_SENTENCE) &&
+      !acc.isEmpty() &&
+      !acc.contains("(") &&
+      !acc.contains(")") &&
+      nxt.length() >= 40 &&
+      !nxt.contains("?") &&
+      !nxt.contains("!") &&
+      !nxt.contains("(") &&
+      !nxt.contains(")") &&
+      Character.isLowerCase(nxt.charAt(0)) &&
+      !boundary(nxt) &&
+      !majorStageTransition(nxt)
+    ) {
+      return true;
+    }
+
+    if (nxt.length() > 60) {
       return false;
     }
     if (nxt.contains("?") || nxt.contains("!")) {

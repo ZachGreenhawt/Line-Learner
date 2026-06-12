@@ -35,6 +35,10 @@ public class PdfTextExtractor {
     return result.text;
   }
 
+  public static java.util.Set<String> stageHintKeys() {
+    return HybridTextExtraction.stageHintKeys();
+  }
+
   static Map<Integer, String> ocrPages(
     File pdf,
     Set<Integer> pageNumbers,
