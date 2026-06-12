@@ -33,6 +33,12 @@ public class ScriptParser {
     Map<String, String> aliases = CharacterExtractor.loadAliases(session);
     chars = CharacterExtractor.apply(chars, aliases);
     chars = CharacterExtractor.expand(chars);
+    for (Map.Entry<String, String> garble : CharacterExtractor.garbleAliases(
+      scriptText,
+      chars
+    ).entrySet()) {
+      aliases.putIfAbsent(garble.getKey(), garble.getValue());
+    }
 
     System.out.println("Enter the name of your character: ");
     String target = CharacterExtractor.target(sc.nextLine(), chars);
@@ -62,12 +68,17 @@ public class ScriptParser {
 
     List<String> bodyLines = bodyLinesFrom(lines, bodyStartIndex);
 
+    boolean[] stageHints = StageHints.match(
+      bodyLines,
+      ScriptLoader.stageHintKeys()
+    );
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headingIndex =
       SpeakerHeadingIndex.build(bodyLines, chars, aliases);
     List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
       bodyLines,
       headingIndex,
-      chars
+      chars,
+      stageHints
     );
     List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
 

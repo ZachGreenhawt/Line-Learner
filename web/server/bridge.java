@@ -20,6 +20,7 @@ import parser.SpeakerBlockBuilder;
 import parser.TurnBuilder;
 import parser.detect.FurnitureCandidateResolver;
 import parser.detect.SpeakerHeadingIndex;
+import parser.detect.StageHints;
 import parser.model.ParseModels;
 import practice.Settings;
 
@@ -121,12 +122,17 @@ public class bridge {
       ? new ArrayList<>()
       : new ArrayList<>(script.lines.subList(start, script.lines.size()));
 
+    boolean[] stageHints = StageHints.match(
+      bodyLines,
+      ScriptLoader.stageHintKeys()
+    );
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings =
-      SpeakerHeadingIndex.build(bodyLines, script.chars, new HashMap<>());
+      SpeakerHeadingIndex.build(bodyLines, script.chars, script.aliases);
     List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
       bodyLines,
       headings,
-      script.chars
+      script.chars,
+      stageHints
     );
     List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
     CuePairBuilder.Result pairs = CuePairBuilder.build(
@@ -187,9 +193,13 @@ public class bridge {
     }
 
     chars = CharacterExtractor.expand(chars);
+    Map<String, String> aliases = CharacterExtractor.garbleAliases(
+      text,
+      chars
+    );
     List<String> lines = LogicalLineBuilder.build(text, chars);
     lines = FurnitureCandidateResolver.resolve(lines, chars);
-    return new Script(text, chars, lines);
+    return new Script(text, chars, lines, aliases);
   }
 
   private static Set<String> characters(String text) {
@@ -365,11 +375,18 @@ public class bridge {
     final String text;
     final Set<String> chars;
     final List<String> lines;
+    final Map<String, String> aliases;
 
-    Script(String text, Set<String> chars, List<String> lines) {
+    Script(
+      String text,
+      Set<String> chars,
+      List<String> lines,
+      Map<String, String> aliases
+    ) {
       this.text = text == null ? "" : text;
       this.chars = chars == null ? new LinkedHashSet<>() : chars;
       this.lines = lines == null ? new ArrayList<>() : lines;
+      this.aliases = aliases == null ? new HashMap<>() : aliases;
     }
   }
 }
