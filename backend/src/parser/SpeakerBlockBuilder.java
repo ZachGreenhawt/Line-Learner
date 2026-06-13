@@ -42,6 +42,16 @@ public class SpeakerBlockBuilder {
     Set<String> chars,
     boolean[] stageHints
   ) {
+    return build(lines, headings, chars, stageHints, false);
+  }
+
+  public static List<ParseModels.Block> build(
+    List<String> lines,
+    Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings,
+    Set<String> chars,
+    boolean[] stageHints,
+    boolean authoritativeHints
+  ) {
     List<ParseModels.Block> blocks = new ArrayList<>();
     if (lines == null || lines.isEmpty()) {
       return blocks;
@@ -91,7 +101,8 @@ public class SpeakerBlockBuilder {
           knownSpeakers,
           i,
           heading,
-          lastSpeaker
+          lastSpeaker,
+          authoritativeHints ? stageHints : null
         );
 
         if (hasText(built.block)) {
@@ -288,7 +299,8 @@ public class SpeakerBlockBuilder {
     Set<String> knownSpeakers,
     int start,
     SpeakerHeadingIndex.HeadingRecord heading,
-    String previousSpeaker
+    String previousSpeaker,
+    boolean[] stageHints
   ) {
     StringBuilder text = new StringBuilder();
     StringBuilder source = new StringBuilder(lines.get(start));
@@ -310,6 +322,13 @@ public class SpeakerBlockBuilder {
 
       String raw = lines.get(i);
       String line = TextNormalizer.norm(raw);
+      if (hintAt(stageHints, i)) {
+        appendSource(source, raw);
+        extras.add(hintedStage(i, line, raw));
+        reason = appendReason(reason, "source_only_stage");
+        end = i;
+        continue;
+      }
 
       EmbeddedHeading embedded = embedded(line, knownSpeakers);
       if (embedded.exists) {
@@ -359,7 +378,16 @@ public class SpeakerBlockBuilder {
       }
 
       if (role == LineRole.SOURCE_ONLY && !hasText) {
-        break;
+        boolean clearStage =
+          wholeParenthetical(line) ||
+          StageDetector.entranceExit(line) ||
+          StageDetector.whole(line) ||
+          StageDetector.is(line, knownSpeakers) ||
+          StageDetector.strong(line, knownSpeakers);
+        if (clearStage) {
+          break;
+        }
+        role = LineRole.TEXT;
       }
 
       appendSource(source, raw);
@@ -489,9 +517,7 @@ public class SpeakerBlockBuilder {
       return "";
     }
 
-    return (
-        safeDialogue(dialogue) || SpeakerDetector.bareTurn(dialogue)
-      )
+    return (safeDialogue(dialogue) || SpeakerDetector.bareTurn(dialogue))
       ? dialogue
       : "";
   }
@@ -583,6 +609,24 @@ public class SpeakerBlockBuilder {
       raw,
       "HIGH",
       "inline_parenthetical_direction",
+      ParseModels.BlockType.STAGE_BLOCK,
+      true
+    );
+  }
+
+  private static ParseModels.Block hintedStage(
+    int index,
+    String line,
+    String raw
+  ) {
+    return new ParseModels.Block(
+      index,
+      index,
+      "",
+      TextNormalizer.norm(line),
+      raw,
+      "HIGH",
+      "stage_direction_font_italic",
       ParseModels.BlockType.STAGE_BLOCK,
       true
     );

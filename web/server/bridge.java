@@ -122,17 +122,16 @@ public class bridge {
       ? new ArrayList<>()
       : new ArrayList<>(script.lines.subList(start, script.lines.size()));
 
-    boolean[] stageHints = StageHints.match(
-      bodyLines,
-      ScriptLoader.stageHintKeys()
-    );
+    Set<String> hintKeys = ScriptLoader.stageHintKeys();
+    boolean[] stageHints = StageHints.match(bodyLines, hintKeys);
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headings =
       SpeakerHeadingIndex.build(bodyLines, script.chars, script.aliases);
     List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
       bodyLines,
       headings,
       script.chars,
-      stageHints
+      stageHints,
+      StageHints.authoritative(hintKeys)
     );
     List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
     CuePairBuilder.Result pairs = CuePairBuilder.build(
@@ -193,10 +192,8 @@ public class bridge {
     }
 
     chars = CharacterExtractor.expand(chars);
-    Map<String, String> aliases = CharacterExtractor.garbleAliases(
-      text,
-      chars
-    );
+    Map<String, String> aliases = CharacterExtractor.garbleAliases(text, chars);
+    text = FurnitureCandidateResolver.unwrapHeadings(text, chars);
     List<String> lines = LogicalLineBuilder.build(text, chars);
     lines = FurnitureCandidateResolver.resolve(lines, chars);
     return new Script(text, chars, lines, aliases);

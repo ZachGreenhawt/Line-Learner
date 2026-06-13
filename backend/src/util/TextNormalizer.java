@@ -11,7 +11,18 @@ public class TextNormalizer {
 
   public static String cleanName(String text) {
     String out = rawHeadingName(text).toUpperCase();
-    return stripTrailingSpeakerPunctuation(out);
+    out = stripTrailingSpeakerPunctuation(out);
+    while (
+      out.endsWith("-") ||
+      out.endsWith("–") ||
+      out.endsWith("—") ||
+      out.endsWith("~")
+    ) {
+      out = stripTrailingSpeakerPunctuation(
+        out.substring(0, out.length() - 1).strip()
+      );
+    }
+    return out;
   }
 
   public static String rawHeadingName(String text) {

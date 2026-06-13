@@ -98,9 +98,26 @@ public class CharacterExtractor {
   private static final int MAX_NAME_WORDS = 5;
 
   private static final Set<String> BARE_NUMBER_WORDS = Set.of(
-    "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE",
-    "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN",
-    "SEVENTEEN", "EIGHTEEN", "NINETEEN", "TWENTY"
+    "ONE",
+    "TWO",
+    "THREE",
+    "FOUR",
+    "FIVE",
+    "SIX",
+    "SEVEN",
+    "EIGHT",
+    "NINE",
+    "TEN",
+    "ELEVEN",
+    "TWELVE",
+    "THIRTEEN",
+    "FOURTEEN",
+    "FIFTEEN",
+    "SIXTEEN",
+    "SEVENTEEN",
+    "EIGHTEEN",
+    "NINETEEN",
+    "TWENTY"
   );
 
   public static Set<String> load(ParserSessionStore session) {
@@ -360,7 +377,9 @@ public class CharacterExtractor {
   }
 
   private static final java.util.regex.Pattern HEADER_NUMBER_LINE =
-    java.util.regex.Pattern.compile("^([A-Z][A-Z .'\\-]{2,40}?)\\s+(\\d{1,4})$");
+    java.util.regex.Pattern.compile(
+      "^([A-Z][A-Z .'\\-]{2,40}?)\\s+(\\d{1,4})$"
+    );
 
   private static Set<String> headerPrefixes(String text) {
     Map<String, Set<Integer>> numbersByPrefix = new HashMap<>();
@@ -565,8 +584,7 @@ public class CharacterExtractor {
       if (name.equals(garble)) {
         continue;
       }
-      boolean firstWord =
-        firstWordOf(garble, name) || lastWordOf(garble, name);
+      boolean firstWord = firstWordOf(garble, name) || lastWordOf(garble, name);
       if (!garbleOf(garble, name) && !firstWord) {
         continue;
       }
@@ -647,6 +665,10 @@ public class CharacterExtractor {
 
     int cut = looseSpeakerCut(cleaned);
     if (cut > 0 && cut < cleaned.length() - 1) {
+      name = TextNormalizer.cleanName(cleaned.substring(0, cut));
+    } else if (
+      cut > 0 && cut == cleaned.length() - 1 && cleaned.charAt(cut) == ':'
+    ) {
       name = TextNormalizer.cleanName(cleaned.substring(0, cut));
     } else {
       name = TextNormalizer.cleanName(castDashRole(cleaned));

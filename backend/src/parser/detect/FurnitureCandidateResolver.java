@@ -8,6 +8,42 @@ import util.TextNormalizer;
 
 public class FurnitureCandidateResolver {
 
+  public static String unwrapHeadings(String text, Set<String> chars) {
+    if (text == null || text.isEmpty()) {
+      return text == null ? "" : text;
+    }
+    Set<String> names = names(chars);
+    String[] raw = text.split("\n", -1);
+    for (int i = 0; i < raw.length; i++) {
+      String normalized = TextNormalizer.norm(raw[i]);
+      if (!PageFurnitureDetector.wrapped(normalized)) {
+        continue;
+      }
+      String inner = PageFurnitureDetector.unwrap(normalized);
+      if (isKnownHeading(inner, names, chars)) {
+        raw[i] = inner;
+      }
+    }
+    return String.join("\n", raw);
+  }
+
+  private static boolean isKnownHeading(
+    String inner,
+    Set<String> names,
+    Set<String> chars
+  ) {
+    String cleaned = TextNormalizer.norm(inner);
+    if (cleaned.isEmpty() || !cleaned.endsWith(":")) {
+      return false;
+    }
+    String bare = strip(cleaned);
+    if (known(bare, names)) {
+      return true;
+    }
+    String speaker = SpeakerDetector.name(cleaned, chars);
+    return !speaker.isEmpty() && known(speaker, names);
+  }
+
   public static List<String> resolve(List<String> lines, Set<String> chars) {
     List<String> resolved = new ArrayList<>();
     if (lines == null || lines.isEmpty()) {

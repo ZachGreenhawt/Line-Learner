@@ -47,6 +47,7 @@ public class ScriptParser {
     }
     chars = CharacterExtractor.expand(chars);
 
+    scriptText = FurnitureCandidateResolver.unwrapHeadings(scriptText, chars);
     List<String> lines = LogicalLineBuilder.build(scriptText, chars);
     lines = FurnitureCandidateResolver.resolve(lines, chars);
     int suggestedBodyStartIndex = suggestedBodyStart(lines, chars);
@@ -68,17 +69,16 @@ public class ScriptParser {
 
     List<String> bodyLines = bodyLinesFrom(lines, bodyStartIndex);
 
-    boolean[] stageHints = StageHints.match(
-      bodyLines,
-      ScriptLoader.stageHintKeys()
-    );
+    Set<String> hintKeys = ScriptLoader.stageHintKeys();
+    boolean[] stageHints = StageHints.match(bodyLines, hintKeys);
     Map<Integer, SpeakerHeadingIndex.HeadingRecord> headingIndex =
       SpeakerHeadingIndex.build(bodyLines, chars, aliases);
     List<ParseModels.Block> blocks = SpeakerBlockBuilder.build(
       bodyLines,
       headingIndex,
       chars,
-      stageHints
+      stageHints,
+      StageHints.authoritative(hintKeys)
     );
     List<ParseModels.ScriptTurn> turns = TurnBuilder.fromBlocks(blocks);
 
@@ -349,7 +349,9 @@ public class ScriptParser {
     if (t.matches("(?i)^[A-Z][a-z]+\\s+\\d{1,2},\\s+\\d{4}$")) {
       return true;
     }
-    if (t.matches("(?i)^\\d{1,2}/\\d{1,2}\\s*/?\\d{2,4}\\b.*\\bpg\\.?\\s*\\d+.*$")) {
+    if (
+      t.matches("(?i)^\\d{1,2}/\\d{1,2}\\s*/?\\d{2,4}\\b.*\\bpg\\.?\\s*\\d+.*$")
+    ) {
       return true;
     }
     return false;

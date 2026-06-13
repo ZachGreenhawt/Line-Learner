@@ -27,20 +27,29 @@ class NativeColumnTextExtractor {
   private static final int HINT_BUCKET_PT = 3;
   private static final int HINT_MIN_PAGE_LINES = 8;
 
+  private static final double ITALIC_STAGE_RATIO = 0.85;
+  private static final int ITALIC_STAGE_MAX_ROMAN_RUN = 6;
+  private static final int FONT_STYLE_MIN_ITALIC_GLYPHS = 30;
+
   private static final java.util.Set<String> docHintKeys =
     new java.util.HashSet<>();
   private static final java.util.Set<String> docPlainKeys =
     new java.util.HashSet<>();
+  private static boolean documentHasFontStyles = false;
 
   static java.util.Set<String> stageHintKeys() {
     java.util.Set<String> keys = new java.util.HashSet<>(docHintKeys);
     keys.removeAll(docPlainKeys);
+    if (documentHasFontStyles) {
+      keys.add(StageHints.FONT_AUTHORITATIVE);
+    }
     return keys;
   }
 
   static List<HybridTextExtraction.Page> pages(File pdf) throws Exception {
     docHintKeys.clear();
     docPlainKeys.clear();
+    documentHasFontStyles = false;
 
     if (pdf == null || !pdf.exists()) {
       return List.of();
@@ -49,6 +58,8 @@ class NativeColumnTextExtractor {
     List<HybridTextExtraction.Page> pages = new ArrayList<>();
 
     try (PDDocument document = Loader.loadPDF(pdf)) {
+      collectFontHints(document);
+
       int pageCount = document.getNumberOfPages();
 
       for (int pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
@@ -65,16 +76,12 @@ class NativeColumnTextExtractor {
             "Native column bands adopted on page " + pageNumber
           );
           best = columns;
-        } else if (columns == null) {
+        } else if (columns == null && !documentHasFontStyles) {
           collectHintKeys(document, pageNumber, best);
         }
 
         pages.add(
-          new HybridTextExtraction.Page(
-            pageNumber,
-            best.text,
-            best.quality
-          )
+          new HybridTextExtraction.Page(pageNumber, best.text, best.quality)
         );
       }
     }
@@ -107,8 +114,8 @@ class NativeColumnTextExtractor {
   private static final java.util.regex.Pattern FRONT_MATTER_PAGE =
     java.util.regex.Pattern.compile(
       "(?i)\\b(copyright|all rights reserved|isbn|premiere[d]?|directed by|" +
-      "produced by|published|playwright|theatre company|artistic director|" +
-      "characters|cast of characters|dramatis personae|acknowledg)\\b"
+        "produced by|published|playwright|theatre company|artistic director|" +
+        "characters|cast of characters|dramatis personae|acknowledg)\\b"
     );
 
   private static Extracted columnBands(PDDocument document, int pageNumber) {
@@ -258,6 +265,112 @@ class NativeColumnTextExtractor {
       this.text = text;
       this.startX = startX;
       this.left = left;
+    }
+  }
+
+  private static void collectFontHints(PDDocument document) {
+    final java.util.Set<String> localHint = new java.util.HashSet<>();
+    final java.util.Set<String> localPlain = new java.util.HashSet<>();
+    final int[] italicGlyphs = { 0 };
+
+    try {
+      PDFTextStripper stripper = new PDFTextStripper() {
+        @Override
+        protected void writeString(String text, List<TextPosition> positions)
+          throws IOException {
+          classifyFontLine(
+            text,
+            positions,
+            localHint,
+            localPlain,
+            italicGlyphs
+          );
+          super.writeString(text, positions);
+        }
+      };
+      stripper.setSortByPosition(true);
+      stripper.getText(document);
+    } catch (Exception e) {
+      return;
+    }
+
+    if (italicGlyphs[0] >= FONT_STYLE_MIN_ITALIC_GLYPHS) {
+      docHintKeys.addAll(localHint);
+      docPlainKeys.addAll(localPlain);
+      documentHasFontStyles = true;
+    }
+  }
+
+  private static void classifyFontLine(
+    String text,
+    List<TextPosition> positions,
+    java.util.Set<String> hint,
+    java.util.Set<String> plain,
+    int[] italicGlyphs
+  ) {
+    if (text == null || text.isBlank()) {
+      return;
+    }
+
+    int italic = 0;
+    int roman = 0;
+    int run = 0;
+    int maxRun = 0;
+    int parenDepth = 0;
+
+    for (TextPosition t : positions) {
+      String u = t.getUnicode();
+      if (u == null || u.isEmpty()) {
+        continue;
+      }
+      char ch = u.charAt(0);
+      if (ch == '(' || ch == '[') {
+        parenDepth++;
+      }
+      String font =
+        t.getFont() == null
+          ? ""
+          : String.valueOf(t.getFont().getName()).toLowerCase();
+      boolean isItalic = font.contains("italic") || font.contains("oblique");
+      boolean isBold = font.contains("bold");
+      boolean letter = Character.isLetter(ch);
+
+      if (isItalic && letter) {
+        italicGlyphs[0]++;
+      }
+
+      if (parenDepth == 0 && letter) {
+        if (isItalic) {
+          italic++;
+          run = 0;
+        } else if (!isBold) {
+          roman++;
+          run++;
+          maxRun = Math.max(maxRun, run);
+        }
+      }
+      if (!letter) {
+        run = 0;
+      }
+      if (ch == ')' || ch == ']') {
+        parenDepth = Math.max(0, parenDepth - 1);
+      }
+    }
+
+    int total = italic + roman;
+    if (total < 3) {
+      return;
+    }
+    String key = StageHints.key(text);
+    if (key.isEmpty()) {
+      return;
+    }
+
+    double ratio = (double) italic / total;
+    if (ratio >= ITALIC_STAGE_RATIO && maxRun <= ITALIC_STAGE_MAX_ROMAN_RUN) {
+      hint.add(key);
+    } else if (ratio <= 0.15) {
+      plain.add(key);
     }
   }
 
@@ -443,10 +556,7 @@ class NativeColumnTextExtractor {
 
     PDFTextStripper collector = new PDFTextStripper() {
       @Override
-      protected void writeString(
-        String text,
-        List<TextPosition> positions
-      ) {
+      protected void writeString(String text, List<TextPosition> positions) {
         if (positions == null || positions.isEmpty()) {
           return;
         }
@@ -455,9 +565,9 @@ class NativeColumnTextExtractor {
           boolean breakHere =
             i == positions.size() ||
             positions.get(i).getXDirAdj() -
-              (positions.get(i - 1).getXDirAdj() +
-                positions.get(i - 1).getWidthDirAdj()) >
-              jump;
+            (positions.get(i - 1).getXDirAdj() +
+              positions.get(i - 1).getWidthDirAdj()) >
+            jump;
           if (breakHere) {
             spans.add(makeSpan(positions, start, i));
             start = i;
@@ -473,11 +583,7 @@ class NativeColumnTextExtractor {
     return spans;
   }
 
-  private static Span makeSpan(
-    List<TextPosition> positions,
-    int from,
-    int to
-  ) {
+  private static Span makeSpan(List<TextPosition> positions, int from, int to) {
     TextPosition first = positions.get(from);
     TextPosition last = positions.get(to - 1);
 
@@ -590,9 +696,8 @@ class NativeColumnTextExtractor {
     int splits = 0;
 
     for (int i = 0; i <= lines.size(); i++) {
-      Kind kind = i == lines.size()
-        ? Kind.CROSSING
-        : lines.get(i).kind(gutterX, gap);
+      Kind kind =
+        i == lines.size() ? Kind.CROSSING : lines.get(i).kind(gutterX, gap);
 
       boolean gapBreak =
         runStart >= 0 &&
@@ -683,7 +788,9 @@ class NativeColumnTextExtractor {
       : sorted;
   }
 
-  private static int structure(TextExtractionQualityScorer.TextQuality quality) {
+  private static int structure(
+    TextExtractionQualityScorer.TextQuality quality
+  ) {
     if (quality == null) {
       return 0;
     }

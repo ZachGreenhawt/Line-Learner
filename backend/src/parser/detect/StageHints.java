@@ -7,6 +7,12 @@ public class StageHints {
   public static final String OPEN = "<STAGE_HINT>";
   public static final String CLOSE = "</STAGE_HINT>";
 
+  public static final String FONT_AUTHORITATIVE = "font_authoritative";
+
+  public static boolean authoritative(java.util.Set<String> hintKeys) {
+    return hintKeys != null && hintKeys.contains(FONT_AUTHORITATIVE);
+  }
+
   public static String wrap(String text) {
     if (text == null || text.isBlank()) {
       return text;
