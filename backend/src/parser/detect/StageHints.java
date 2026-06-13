@@ -10,8 +10,14 @@ public class StageHints {
   public static final String FONT_AUTHORITATIVE = "font_authoritative";
 
   public static boolean authoritative(java.util.Set<String> hintKeys) {
-    return hintKeys != null && hintKeys.contains(FONT_AUTHORITATIVE);
+    return (
+      hintKeys != null &&
+      (hintKeys.contains(FONT_AUTHORITATIVE) ||
+        hintKeys.contains(VISUAL_AUTHORITATIVE))
+    );
   }
+
+  public static final String VISUAL_AUTHORITATIVE = "visual_authoritative";
 
   public static String wrap(String text) {
     if (text == null || text.isBlank()) {

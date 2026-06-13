@@ -21,7 +21,7 @@ public class ScriptLoader {
 
   private static final boolean USE_EXTRACTED_TEXT_CACHE = true;
   private static final String EXTRACTION_PIPELINE_VERSION =
-    "pdf-ocr-v8-indent-hints";
+    "pdf-ocr-v9-visual-stage";
 
   private static final Set<String> IMAGE_EXTENSIONS = Set.of(
     ".jpg",

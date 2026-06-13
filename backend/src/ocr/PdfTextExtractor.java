@@ -36,7 +36,11 @@ public class PdfTextExtractor {
   }
 
   public static java.util.Set<String> stageHintKeys() {
-    return HybridTextExtraction.stageHintKeys();
+    java.util.Set<String> keys = new java.util.HashSet<>(
+      HybridTextExtraction.stageHintKeys()
+    );
+    keys.addAll(VisualStageScorer.keys());
+    return keys;
   }
 
   static Map<Integer, String> ocrPages(
@@ -51,6 +55,7 @@ public class PdfTextExtractor {
 
     OcrDiagnosticsExporter.reset();
     ImagePreprocessor.reset();
+    VisualStageScorer.reset();
 
     DocumentLearningCache store =
       cache == null ? new DocumentLearningCache() : cache;
@@ -60,6 +65,10 @@ public class PdfTextExtractor {
       PDFRenderer renderer = new PDFRenderer(document);
       TesseractCli tesseract = makeTesseract();
       int pageCount = document.getNumberOfPages();
+
+      VisualStageScorer.setScanDominant(
+        pageCount > 0 && pageNumbers.size() * 2 >= pageCount
+      );
 
       for (int pageNumber : new TreeSet<>(pageNumbers)) {
         int pageIndex = pageNumber - 1;
@@ -73,6 +82,8 @@ public class PdfTextExtractor {
           OCR_DPI,
           ImageType.RGB
         );
+
+        VisualStageScorer.scorePage(pageImage, tesseract);
 
         out.put(
           pageNumber,

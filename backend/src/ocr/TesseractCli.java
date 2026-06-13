@@ -103,6 +103,145 @@ public class TesseractCli {
     return ImageIO.write(image, "png", file);
   }
 
+  public static final class TextLine {
+
+    public final String text;
+    public final int x;
+    public final int y;
+    public final int width;
+    public final int height;
+
+    TextLine(String text, int x, int y, int width, int height) {
+      this.text = text == null ? "" : text;
+      this.x = x;
+      this.y = y;
+      this.width = width;
+      this.height = height;
+    }
+  }
+
+  public List<TextLine> doOCRWithLines(BufferedImage image) {
+    if (image == null) {
+      return new ArrayList<>();
+    }
+
+    File input = null;
+    File base = null;
+    File tsv = null;
+    try {
+      input = File.createTempFile("line-learner-tsv-", ".bmp");
+      if (!writeForOcr(image, input)) {
+        return new ArrayList<>();
+      }
+      base = File.createTempFile("line-learner-tsvout-", "");
+      tsv = new File(base.getAbsolutePath() + ".tsv");
+
+      List<String> command = new ArrayList<>();
+      command.add(binary);
+      command.add(input.getAbsolutePath());
+      command.add(base.getAbsolutePath());
+      if (datapath != null && !datapath.isBlank()) {
+        command.add("--tessdata-dir");
+        command.add(datapath);
+      }
+      command.add("-l");
+      command.add(language);
+      command.add("--oem");
+      command.add(Integer.toString(oem));
+      command.add("--psm");
+      command.add(Integer.toString(psm));
+      command.add("-c");
+      command.add("tessedit_create_tsv=1");
+
+      ExecResult result = exec(command);
+      if (result.timedOut || result.exit != 0 || !tsv.exists()) {
+        return new ArrayList<>();
+      }
+      String body = new String(
+        java.nio.file.Files.readAllBytes(tsv.toPath()),
+        StandardCharsets.UTF_8
+      );
+      return parseTsv(body);
+    } catch (IOException | InterruptedException error) {
+      return new ArrayList<>();
+    } finally {
+      deleteQuietly(input);
+      deleteQuietly(base);
+      deleteQuietly(tsv);
+    }
+  }
+
+  private static void deleteQuietly(File file) {
+    if (file != null && file.exists() && !file.delete()) {
+      file.deleteOnExit();
+    }
+  }
+
+  private static List<TextLine> parseTsv(String body) {
+    List<TextLine> lines = new ArrayList<>();
+    if (body == null || body.isBlank()) {
+      return lines;
+    }
+
+    int[] box = null;
+    StringBuilder text = new StringBuilder();
+
+    for (String row : body.split("\n")) {
+      String[] f = row.split("\t", -1);
+      if (f.length < 12) {
+        continue;
+      }
+      int level;
+      try {
+        level = Integer.parseInt(f[0].trim());
+      } catch (NumberFormatException ignored) {
+        continue; // header row
+      }
+
+      if (level <= 4) {
+        flushLine(lines, box, text);
+        box = null;
+        text.setLength(0);
+        if (level == 4) {
+          box = parseBox(f);
+        }
+      } else if (level == 5) {
+        String word = f[11];
+        if (word != null && !word.isBlank()) {
+          if (text.length() > 0) {
+            text.append(' ');
+          }
+          text.append(word.trim());
+        }
+      }
+    }
+    flushLine(lines, box, text);
+    return lines;
+  }
+
+  private static int[] parseBox(String[] f) {
+    try {
+      return new int[] {
+        Integer.parseInt(f[6].trim()),
+        Integer.parseInt(f[7].trim()),
+        Integer.parseInt(f[8].trim()),
+        Integer.parseInt(f[9].trim()),
+      };
+    } catch (NumberFormatException ignored) {
+      return null;
+    }
+  }
+
+  private static void flushLine(
+    List<TextLine> lines,
+    int[] box,
+    StringBuilder text
+  ) {
+    if (box != null && text.length() > 0) {
+      lines.add(new TextLine(text.toString(), box[0], box[1], box[2], box[3]));
+    }
+  }
+
   private String run(File input) throws IOException, InterruptedException {
     List<String> command = new ArrayList<>();
     command.add(binary);
