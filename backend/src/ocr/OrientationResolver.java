@@ -184,7 +184,7 @@ public class OrientationResolver {
       return false;
     }
 
-    return (profile.shouldAccept(result, tier) && strong(result.best));
+    return profile.shouldAccept(result, tier);
   }
 
   private static OcrResult finish(
@@ -234,20 +234,6 @@ public class OrientationResolver {
     );
 
     return result;
-  }
-
-  private static boolean strong(OcrCandidate candidate) {
-    if (candidate == null) {
-      return false;
-    }
-
-    return (
-      candidate.confidence >= 0.88 &&
-      candidate.junkRatio <= 0.06 &&
-      candidate.englishRatio >= 0.15 &&
-      candidate.tokens <= 2 &&
-      !wrongRotation(candidate)
-    );
   }
 
   private static OcrCandidate better(

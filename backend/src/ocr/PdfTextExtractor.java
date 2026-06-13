@@ -66,9 +66,9 @@ public class PdfTextExtractor {
       TesseractCli tesseract = makeTesseract();
       int pageCount = document.getNumberOfPages();
 
-      VisualStageScorer.setScanDominant(
-        pageCount > 0 && pageNumbers.size() * 2 >= pageCount
-      );
+      boolean scanDominant =
+        pageCount > 0 && pageNumbers.size() * 2 >= pageCount;
+      VisualStageScorer.setScanDominant(scanDominant);
 
       for (int pageNumber : new TreeSet<>(pageNumbers)) {
         int pageIndex = pageNumber - 1;
@@ -83,7 +83,9 @@ public class PdfTextExtractor {
           ImageType.RGB
         );
 
-        VisualStageScorer.scorePage(pageImage, tesseract);
+        if (scanDominant) {
+          VisualStageScorer.scorePage(pageImage, tesseract);
+        }
 
         out.put(
           pageNumber,
