@@ -30,6 +30,7 @@ class NativeColumnTextExtractor {
   private static final double ITALIC_STAGE_RATIO = 0.85;
   private static final int ITALIC_STAGE_MAX_ROMAN_RUN = 6;
   private static final int FONT_STYLE_MIN_ITALIC_GLYPHS = 30;
+  private static final double FONT_GUTTER_JUMP_RATIO = 0.05;
 
   private static final java.util.Set<String> docHintKeys =
     new java.util.HashSet<>();
@@ -278,14 +279,27 @@ class NativeColumnTextExtractor {
         @Override
         protected void writeString(String text, List<TextPosition> positions)
           throws IOException {
-          classifyFontLine(
-            text,
-            positions,
-            localHint,
-            localPlain,
-            italicGlyphs
-          );
+          countItalicGlyphs(positions, italicGlyphs);
+          classifyFontLine(positions, localHint, localPlain);
+          float jump = gutterJump();
+          List<List<TextPosition>> segments = splitAtGutters(positions, jump);
+          if (segments.size() > 1) {
+            for (List<TextPosition> segment : segments) {
+              classifyFontLine(segment, localHint, null);
+            }
+          }
           super.writeString(text, positions);
+        }
+
+        private float gutterJump() {
+          try {
+            return (
+              getCurrentPage().getMediaBox().getWidth() *
+              (float) FONT_GUTTER_JUMP_RATIO
+            );
+          } catch (Exception ignored) {
+            return Float.MAX_VALUE;
+          }
         }
       };
       stripper.setSortByPosition(true);
@@ -301,14 +315,65 @@ class NativeColumnTextExtractor {
     }
   }
 
-  private static void classifyFontLine(
-    String text,
+  private static void countItalicGlyphs(
     List<TextPosition> positions,
-    java.util.Set<String> hint,
-    java.util.Set<String> plain,
     int[] italicGlyphs
   ) {
-    if (text == null || text.isBlank()) {
+    if (positions == null) {
+      return;
+    }
+    for (TextPosition t : positions) {
+      String u = t.getUnicode();
+      if (u == null || u.isEmpty()) {
+        continue;
+      }
+      if (!Character.isLetter(u.charAt(0))) {
+        continue;
+      }
+      String font =
+        t.getFont() == null
+          ? ""
+          : String.valueOf(t.getFont().getName()).toLowerCase();
+      if (font.contains("italic") || font.contains("oblique")) {
+        italicGlyphs[0]++;
+      }
+    }
+  }
+
+  private static List<List<TextPosition>> splitAtGutters(
+    List<TextPosition> positions,
+    float jump
+  ) {
+    List<List<TextPosition>> segments = new ArrayList<>();
+    if (positions == null || positions.isEmpty()) {
+      return segments;
+    }
+    int start = 0;
+    for (int i = 1; i <= positions.size(); i++) {
+      boolean breakHere = i == positions.size();
+      if (!breakHere) {
+        TextPosition prev = positions.get(i - 1);
+        TextPosition cur = positions.get(i);
+        float gap =
+          cur.getXDirAdj() - (prev.getXDirAdj() + prev.getWidthDirAdj());
+        if (gap > jump) {
+          breakHere = true;
+        }
+      }
+      if (breakHere) {
+        segments.add(positions.subList(start, i));
+        start = i;
+      }
+    }
+    return segments;
+  }
+
+  private static void classifyFontLine(
+    List<TextPosition> positions,
+    java.util.Set<String> hint,
+    java.util.Set<String> plain
+  ) {
+    if (positions == null || positions.isEmpty()) {
       return;
     }
 
@@ -317,12 +382,14 @@ class NativeColumnTextExtractor {
     int run = 0;
     int maxRun = 0;
     int parenDepth = 0;
+    StringBuilder text = new StringBuilder();
 
     for (TextPosition t : positions) {
       String u = t.getUnicode();
       if (u == null || u.isEmpty()) {
         continue;
       }
+      text.append(u);
       char ch = u.charAt(0);
       if (ch == '(' || ch == '[') {
         parenDepth++;
@@ -334,10 +401,6 @@ class NativeColumnTextExtractor {
       boolean isItalic = font.contains("italic") || font.contains("oblique");
       boolean isBold = font.contains("bold");
       boolean letter = Character.isLetter(ch);
-
-      if (isItalic && letter) {
-        italicGlyphs[0]++;
-      }
 
       if (parenDepth == 0 && letter) {
         if (isItalic) {
@@ -361,7 +424,7 @@ class NativeColumnTextExtractor {
     if (total < 3) {
       return;
     }
-    String key = StageHints.key(text);
+    String key = StageHints.key(text.toString());
     if (key.isEmpty()) {
       return;
     }
@@ -369,7 +432,7 @@ class NativeColumnTextExtractor {
     double ratio = (double) italic / total;
     if (ratio >= ITALIC_STAGE_RATIO && maxRun <= ITALIC_STAGE_MAX_ROMAN_RUN) {
       hint.add(key);
-    } else if (ratio <= 0.15) {
+    } else if (plain != null && ratio <= 0.15) {
       plain.add(key);
     }
   }
