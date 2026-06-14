@@ -96,6 +96,7 @@ public class CharacterExtractor {
 
   private static final int MAX_NAME_LENGTH = 45;
   private static final int MAX_NAME_WORDS = 5;
+  private static final int ACTOR_RECUR_MIN = 3;
 
   private static final Set<String> BARE_NUMBER_WORDS = Set.of(
     "ONE",
@@ -318,13 +319,40 @@ public class CharacterExtractor {
     Set<String> headerPrefixes = headerPrefixes(text);
     List<String> furnitureTexts = new ArrayList<>();
 
-    for (String raw : text.split(RegexTerms.NEWLINE)) {
-      String line = TextNormalizer.norm(raw);
-      if (PageFurnitureDetector.wrapped(line)) {
-        furnitureTexts.add(PageFurnitureDetector.unwrap(line).toUpperCase());
-        continue;
+    String[] rawLines = text.split(RegexTerms.NEWLINE);
+    List<String> norm = new ArrayList<>(rawLines.length);
+    for (String raw : rawLines) {
+      norm.add(TextNormalizer.norm(raw));
+    }
+
+    Map<String, Integer> wrappedFreq = new HashMap<>();
+    for (String l : norm) {
+      if (PageFurnitureDetector.wrapped(l)) {
+        wrappedFreq.merge(
+          TextNormalizer.norm(PageFurnitureDetector.unwrap(l)),
+          1,
+          Integer::sum
+        );
       }
-      if (
+    }
+
+    for (int i = 0; i < norm.size(); i++) {
+      String line = norm.get(i);
+      boolean wrapped = PageFurnitureDetector.wrapped(line);
+      String effective = wrapped
+        ? TextNormalizer.norm(PageFurnitureDetector.unwrap(line))
+        : line;
+
+      if (wrapped) {
+        furnitureTexts.add(effective.toUpperCase());
+        if (
+          !(heading(effective) &&
+            wrappedFreq.getOrDefault(effective, 0) >= HEADING_USE_MIN &&
+            nextIsDialogue(norm, i))
+        ) {
+          continue;
+        }
+      } else if (
         headerPrefixLine(line, headerPrefixes) ||
         StageDetector.skip(line) ||
         (StageDetector.junk(line) &&
@@ -333,8 +361,9 @@ public class CharacterExtractor {
       ) {
         continue;
       }
-      addHeadingUse(headingUse, line);
-      addFromLine(counts, line);
+
+      addHeadingUse(headingUse, effective);
+      addFromLine(counts, effective);
     }
 
     Set<String> chars = keep(counts);
@@ -735,6 +764,35 @@ public class CharacterExtractor {
     return out;
   }
 
+  private static boolean nextIsDialogue(List<String> lines, int i) {
+    for (int j = i + 1; j < lines.size() && j <= i + 4; j++) {
+      String l = lines.get(j);
+      if (PageFurnitureDetector.wrapped(l)) {
+        l = TextNormalizer.norm(PageFurnitureDetector.unwrap(l));
+      }
+      if (l.isEmpty()) {
+        continue;
+      }
+      if (l.startsWith("(") || l.startsWith("[")) {
+        continue;
+      }
+      return isDialogueLine(l);
+    }
+    return false;
+  }
+
+  private static boolean isDialogueLine(String line) {
+    if (!TextNormalizer.hasLetter(line)) {
+      return false;
+    }
+    for (int i = 0; i < line.length(); i++) {
+      if (Character.isLowerCase(line.charAt(i))) {
+        return !heading(line);
+      }
+    }
+    return false;
+  }
+
   private static void addFromLine(Map<String, Integer> counts, String line) {
     String cleaned = TextNormalizer.norm(line);
 
@@ -1050,7 +1108,6 @@ public class CharacterExtractor {
       !name.startsWith("ENTER ") &&
       !name.startsWith("EXIT ") &&
       !authorOrPublisher(name) &&
-      !actorName(name) &&
       !headerOrFooter(name)
     );
   }
@@ -1108,7 +1165,7 @@ public class CharacterExtractor {
     }
 
     String name = trueRoleName(raw);
-    if (authorOrPublisher(name) || actorName(name) || headerOrFooter(name)) {
+    if (authorOrPublisher(name) || headerOrFooter(name)) {
       return;
     }
     counts.put(name, counts.getOrDefault(name, 0) + 1);
@@ -1136,7 +1193,7 @@ public class CharacterExtractor {
       !name.startsWith("ENTER ") &&
       !name.startsWith("EXIT ") &&
       !authorOrPublisher(name) &&
-      !actorName(name) &&
+      !(actorName(name) && count < ACTOR_RECUR_MIN) &&
       !headerOrFooter(name) &&
       !repeated(name) &&
       !combinedName(name, count, counts) &&
