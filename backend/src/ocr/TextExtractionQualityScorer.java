@@ -14,7 +14,7 @@ public class TextExtractionQualityScorer {
       return TextQuality.empty();
     }
 
-    String normalized = cleanText(text);
+    String normalized = stripAnnotations(cleanText(text));
     String[] lines = normalized.split(RegexTerms.LINE_BREAK);
 
     int nonBlankLines = 0;
@@ -217,9 +217,7 @@ public class TextExtractionQualityScorer {
       String lettersOnly = line.replaceAll(RegexTerms.NON_LETTER, "");
       if (
         lettersOnly.length() >= 10 &&
-        lettersOnly.matches(
-          RegexTerms.CONSONANT_RUN_5_MIXED
-        )
+        lettersOnly.matches(RegexTerms.CONSONANT_RUN_5_MIXED)
       ) {
         consonantChunks++;
         suspicious++;
@@ -363,12 +361,8 @@ public class TextExtractionQualityScorer {
     return (
       upper.matches(RegexTerms.PAGE_NUMBER_ONLY) ||
       upper.matches(RegexTerms.PAGE_LABEL) ||
-      upper.matches(
-        RegexTerms.CAPS_WORDS_THEN_NUMBER
-      ) ||
-      upper.matches(
-        RegexTerms.NUMBER_THEN_CAPS_WORDS
-      ) ||
+      upper.matches(RegexTerms.CAPS_WORDS_THEN_NUMBER) ||
+      upper.matches(RegexTerms.NUMBER_THEN_CAPS_WORDS) ||
       upper.matches(RegexTerms.CONTAINS_ISBN_CI) ||
       upper.matches(RegexTerms.CONTAINS_WWW_CI) ||
       upper.matches(RegexTerms.CONTAINS_WEB_TLD_CI)
@@ -425,7 +419,18 @@ public class TextExtractionQualityScorer {
   }
 
   private static boolean isCommonTextPunctuation(char ch) {
-    return ".,;:!?()[]{}'\"-/–—&…“. ”’‘".indexOf(ch) >= 0;
+    return ".,;:!?()[]{}'\"-/–—&…“. ”’‘#".indexOf(ch) >= 0;
+  }
+
+  private static String stripAnnotations(String text) {
+    if (text == null || text.isEmpty()) {
+      return text == null ? "" : text;
+    }
+    return text
+      .replaceAll("<FURNITURE_CANDIDATE[^>]*>", "")
+      .replace("</FURNITURE_CANDIDATE>", "")
+      .replace("<STAGE_HINT>", "")
+      .replace("</STAGE_HINT>", "");
   }
 
   private static void appendBlankLine(StringBuilder out) {
