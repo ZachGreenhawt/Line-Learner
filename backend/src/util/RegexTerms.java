@@ -512,6 +512,9 @@ public final class RegexTerms {
   public static final String SONG_CUE_MARKER =
     "(?i)^[\\[(]?\\s*(reprise|underscore|under-score|vamp|playoff|play-off|" +
     "playout|segue|entr'?acte|exit music|incidental music|music cue)\\b.*";
+  public static final String SONG_TITLE_WORD =
+    "(?i).*\\b(reprise|underscore|under-score|vamp|playoff|play-off|" +
+    "playout|segue|entr'?acte|entracte)\\b.*";
   public static final String SINGS_PARENTHETICAL =
     "(?i).*\\([^)]*\\b(sings?|singing|sung)\\b[^)]*\\).*";
   public static final String MUSIC_TECH_OPEN =

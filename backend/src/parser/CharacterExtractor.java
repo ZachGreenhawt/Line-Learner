@@ -369,6 +369,7 @@ public class CharacterExtractor {
     Set<String> chars = keep(counts);
     chars.removeIf(name -> furnitureVocab(name, counts, furnitureTexts));
     chars.addAll(keepHeadingNames(headingUse));
+    chars.removeAll(musicLyricNames(norm, chars));
 
     Map<String, Integer> usage = garbleUsage(text);
     for (int pass = 0; pass < 6; pass++) {
@@ -791,6 +792,151 @@ public class CharacterExtractor {
       }
     }
     return false;
+  }
+
+  private static String minedName(String line) {
+    String cleaned = TextNormalizer.norm(line);
+
+    int earlyDot = SpeakerDetector.speakerDot(cleaned);
+    if (earlyDot > 0 && earlyDot < cleaned.length() - 1) {
+      return candidateKey(cleaned.substring(0, earlyDot));
+    }
+
+    String dashRole = castDashRole(cleaned);
+    if (!dashRole.isEmpty()) {
+      return candidateKey(dashRole);
+    }
+
+    String role = castRole(cleaned);
+    if (!role.isEmpty()) {
+      String name = trueRoleName(role);
+      if (
+        roleName(name) &&
+        !authorOrPublisher(name) &&
+        !actorName(name) &&
+        !headerOrFooter(name)
+      ) {
+        return name;
+      }
+      return "";
+    }
+
+    String castListed = castListRole(cleaned);
+    if (!castListed.isEmpty()) {
+      return candidateKey(castListed);
+    }
+
+    int colon = cleaned.indexOf(":");
+    if (colon > 0) {
+      return candidateKey(cleaned.substring(0, colon));
+    }
+
+    int dot = SpeakerDetector.speakerDot(cleaned);
+    if (dot > 0) {
+      return candidateKey(cleaned.substring(0, dot));
+    }
+
+    return candidateKey(cleaned);
+  }
+
+  private static String candidateKey(String raw) {
+    if (!heading(raw)) {
+      return "";
+    }
+    String name = trueRoleName(raw);
+    if (authorOrPublisher(name) || headerOrFooter(name)) {
+      return "";
+    }
+    return name;
+  }
+
+  private static Set<String> musicLyricNames(
+    List<String> norm,
+    Set<String> chars
+  ) {
+    Set<String> drop = new HashSet<>();
+    if (norm == null || norm.isEmpty() || chars == null || chars.isEmpty()) {
+      return drop;
+    }
+
+    List<String> eff = new ArrayList<>(norm.size());
+    for (String l : norm) {
+      eff.add(
+        PageFurnitureDetector.wrapped(l)
+          ? TextNormalizer.norm(PageFurnitureDetector.unwrap(l))
+          : l
+      );
+    }
+
+    boolean[] inSong = MusicDetector.songRegions(eff, chars);
+    boolean anySong = false;
+    for (boolean b : inSong) {
+      if (b) {
+        anySong = true;
+        break;
+      }
+    }
+    if (!anySong) {
+      return drop;
+    }
+
+    Set<String> cleanChars = new HashSet<>();
+    for (String c : chars) {
+      cleanChars.add(TextNormalizer.cleanName(c));
+    }
+
+    Set<String> confirmed = confirmedSpeakers(eff);
+
+    Map<String, int[]> tally = new HashMap<>();
+    for (int i = 0; i < eff.size(); i++) {
+      String name = minedName(eff.get(i));
+      if (name.isEmpty() || !cleanChars.contains(name)) {
+        continue;
+      }
+      int[] t = tally.computeIfAbsent(name, k -> new int[2]);
+      if (inSong[i]) {
+        t[0]++;
+      } else {
+        t[1]++;
+      }
+    }
+
+    for (String name : cleanChars) {
+      if (MusicDetector.songTitleName(name)) {
+        drop.add(name);
+        continue;
+      }
+      if (confirmed.contains(name)) {
+        continue;
+      }
+      int[] t = tally.get(name);
+      if (t != null && t[0] >= 1 && t[1] == 0) {
+        drop.add(name);
+      }
+    }
+    return drop;
+  }
+
+  private static Set<String> confirmedSpeakers(List<String> eff) {
+    Set<String> confirmed = new HashSet<>();
+    for (int i = 0; i < eff.size(); i++) {
+      String line = eff.get(i);
+      boolean dialogueFollows;
+      int cut = SpeakerDetector.speakerDot(line);
+      if (cut > 0 && cut < line.length() - 1) {
+        dialogueFollows = isDialogueLine(line.substring(cut + 1));
+      } else {
+        dialogueFollows = nextIsDialogue(eff, i);
+      }
+      if (!dialogueFollows) {
+        continue;
+      }
+      String name = minedName(line);
+      if (!name.isEmpty()) {
+        confirmed.add(name);
+      }
+    }
+    return confirmed;
   }
 
   private static void addFromLine(Map<String, Integer> counts, String line) {

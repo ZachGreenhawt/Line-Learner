@@ -30,6 +30,11 @@ public class MusicDetector {
     return !t.isEmpty() && t.matches(RegexTerms.SINGS_PARENTHETICAL);
   }
 
+  public static boolean songTitleName(String name) {
+    String t = TextNormalizer.norm(name);
+    return !t.isEmpty() && t.matches(RegexTerms.SONG_TITLE_WORD);
+  }
+
   private static boolean regionBoundary(String line) {
     String t = TextNormalizer.norm(line);
     if (t.isEmpty()) {
@@ -151,6 +156,42 @@ public class MusicDetector {
     }
 
     return isMusic;
+  }
+
+  public static boolean[] songRegions(List<String> lines, Set<String> chars) {
+    int n = lines == null ? 0 : lines.size();
+    boolean[] inSong = new boolean[n];
+    if (n == 0) {
+      return inSong;
+    }
+
+    boolean active = false;
+    int spokenRun = 0;
+
+    for (int i = 0; i < n; i++) {
+      String line = TextNormalizer.norm(lines.get(i));
+      boolean capsAny =
+        lyricLine(line, chars, STRICT_CAPS_RATIO, 2) ||
+        lyricLine(line, chars, RELAXED_CAPS_RATIO, 1);
+
+      if (regionBoundary(line)) {
+        active = false;
+        spokenRun = 0;
+      } else if (songMarker(line) || singsCue(line)) {
+        active = true;
+        spokenRun = 0;
+      } else if (capsAny) {
+        spokenRun = 0;
+      } else if (spokenLine(line, chars)) {
+        if (++spokenRun >= SPOKEN_RUN_CLOSES_SONG) {
+          active = false;
+        }
+      }
+
+      inSong[i] = active;
+    }
+
+    return inSong;
   }
 
   public static boolean blockIsMusic(boolean[] music, int start, int end) {
