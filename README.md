@@ -12,10 +12,12 @@ It can run as a terminal Java app or through a simple local web UI. Scripts stay
 - Detects and corrects page orientation, including sideways and upside-down scans
 - Caches extracted text so repeat uploads are faster
 - Detects characters and speaker headings
+- Detects stage directions and songs, and excludes sung lyrics from practice by default
 - Lets you add/remove detected characters before parsing
 - Lets you choose the starting line before parsing
 - Lets you remove repeated headers, footers, OCR junk, or other phrases before parsing
 - Builds cue/response pairs for a selected character
+- Offers practice settings: include stage directions in cues, include your sung lines, timed recall, case sensitivity, and punctuation matching
 - Runs line practice by showing a cue and asking for the next line
 - Exports parser diagnostics as CSV files from the terminal app
 
@@ -28,10 +30,12 @@ The web app provides the main workflow without needing to use the terminal promp
 3. Pick the starting line
 4. Optionally enter repeated text to remove before parsing
 5. Choose your character
-6. Parse the script
-7. Practice from cue to line
+6. Choose practice settings (stage directions, songs, timed recall, case, punctuation)
+7. Parse the script
+8. Practice from cue to line
+9. Finish to delete your script and its extracted text from the server
 
-Uploaded scripts are saved in `web/.data/uploads/`. The server fingerprints uploads by file contents, and if the same file is uploaded multiple times, it reuses the saved copy and cached extraction rather than treating it as a new script.
+Uploaded scripts are saved in `web/.data/uploads/`. The server fingerprints uploads by file contents, and if the same file is uploaded multiple times, it reuses the saved copy and cached extraction rather than treating it as a new script. When you finish a session, or after a period of inactivity, the upload, its cached extraction, and the session record are deleted automatically.
 
 ## Run through the Website
 
@@ -134,7 +138,7 @@ Current priorities:
 
 ## Privacy
 
-Scripts can contain sensitive material. Line-Learner runs locally and does **not** upload scripts to any external service.
+Scripts can contain sensitive material. Line-Learner runs locally and does **not** upload scripts to any external service. Uploaded files and their extracted text are deleted when you finish a session, and any sessions left idle are swept and removed automatically.
 
 ## Why This Project
 
