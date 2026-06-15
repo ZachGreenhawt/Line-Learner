@@ -572,25 +572,6 @@ public class SpeakerBlockBuilder {
     );
   }
 
-  private static ParseModels.Block recoveredStageTailBlock(
-    int index,
-    String speaker,
-    String text,
-    String raw
-  ) {
-    return new ParseModels.Block(
-      index,
-      index,
-      speaker,
-      TextNormalizer.norm(text),
-      raw,
-      "LOW",
-      "recovered_leading_stage_tail_dialogue",
-      ParseModels.BlockType.SPEAKER_BLOCK,
-      false
-    );
-  }
-
   private static boolean wholeParenthetical(String line) {
     String t = TextNormalizer.norm(line);
     return !t.isEmpty() && StageDetector.whole(t);
