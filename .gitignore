@@ -19,3 +19,6 @@ backend/out/
 # Editor and OS files
 .vscode
 .DS_Store
+
+# Local parser eval harness
+eval/
