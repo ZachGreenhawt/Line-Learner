@@ -189,6 +189,7 @@ public class bridge {
 
     if (chars.isEmpty()) {
       chars.addAll(CharacterExtractor.find(text));
+      chars = CharacterExtractor.removeBylineAuthors(chars, name);
     }
 
     chars = CharacterExtractor.expand(chars);

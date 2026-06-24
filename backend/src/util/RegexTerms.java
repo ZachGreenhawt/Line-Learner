@@ -512,6 +512,11 @@ public final class RegexTerms {
   public static final String SONG_CUE_MARKER =
     "(?i)^[\\[(]?\\s*(reprise|underscore|under-score|vamp|playoff|play-off|" +
     "playout|segue|entr'?acte|exit music|incidental music|music cue)\\b.*";
+  public static final String NUMBER_OR_ORDINAL_WORD =
+    "(?i)\\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|" +
+    "thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|" +
+    "first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|" +
+    "eleventh|twelfth)\\b";
   public static final String SONG_TITLE_WORD =
     "(?i).*\\b(reprise|underscore|under-score|vamp|playoff|play-off|" +
     "playout|segue|entr'?acte|entracte)\\b.*";

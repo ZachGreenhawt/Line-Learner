@@ -91,7 +91,21 @@ public class CharacterExtractor {
     "MRS",
     "MS",
     "MISS",
-    "DR"
+    "DR",
+    "CURTAIN",
+    "OFFSTAGE",
+    "ONSTAGE",
+    "BACKSTAGE",
+    "STAGE LEFT",
+    "STAGE RIGHT",
+    "BLACKOUT",
+    "INTERMISSION",
+    "LIGHTS UP",
+    "LIGHTS DOWN",
+    "LIGHTS OUT",
+    "FOOTNOTE",
+    "PROLOGUE",
+    "EPILOGUE"
   );
 
   private static final int MAX_NAME_LENGTH = 45;
@@ -119,6 +133,186 @@ public class CharacterExtractor {
     "EIGHTEEN",
     "NINETEEN",
     "TWENTY"
+  );
+
+  private static final Set<String> EDGE_STOPWORDS = Set.of(
+    "AND",
+    "OR",
+    "BUT",
+    "NOR",
+    "SO",
+    "YET",
+    "FOR",
+    "OF",
+    "ON",
+    "IN",
+    "TO",
+    "FROM",
+    "WITH",
+    "AT",
+    "BY",
+    "AS",
+    "BEHIND",
+    "ABOVE",
+    "BELOW",
+    "UNDER",
+    "OVER",
+    "INTO",
+    "ONTO",
+    "UPON",
+    "THEN",
+    "NOW",
+    "TOO",
+    "ALSO"
+  );
+  private static final Set<String> HONORIFICS = Set.of(
+    "MR",
+    "MRS",
+    "MS",
+    "DR",
+    "ST",
+    "REV",
+    "FR",
+    "SR",
+    "JR",
+    "SGT",
+    "GEN",
+    "COL",
+    "CAPT",
+    "CPT",
+    "LT",
+    "MAJ",
+    "ADM",
+    "CPL",
+    "PVT",
+    "PROF",
+    "GOV",
+    "SEN",
+    "REP",
+    "PRES",
+    "HON",
+    "MSGR"
+  );
+  private static final Set<String> VOCATIVE_ROLE_WORDS = Set.of(
+    "MOTHER",
+    "FATHER",
+    "MOM",
+    "MOMMY",
+    "MAMA",
+    "MUM",
+    "MUMMY",
+    "DAD",
+    "DADDY",
+    "PAPA",
+    "POP",
+    "SON",
+    "DAUGHTER",
+    "SISTER",
+    "BROTHER",
+    "GRANDMA",
+    "GRANDPA",
+    "GRANDMOTHER",
+    "GRANDFATHER",
+    "GRANNY",
+    "NANA",
+    "AUNT",
+    "AUNTIE",
+    "UNCLE",
+    "DARLING",
+    "HONEY",
+    "SWEETHEART",
+    "DEAR",
+    "SIR",
+    "MADAM",
+    "MAAM",
+    "MISS"
+  );
+  private static final Set<String> NON_NAME_WORDS = Set.of(
+    "FOREVER",
+    "HONESTLY",
+    "GOODNIGHT",
+    "GOODBYE",
+    "HELLO",
+    "ALWAYS",
+    "NEVER",
+    "MAYBE",
+    "PERHAPS",
+    "SUDDENLY",
+    "FINALLY",
+    "REALLY",
+    "TRULY",
+    "SURELY",
+    "ANYWAY",
+    "SOMEHOW",
+    "SOMEDAY",
+    "TOGETHER",
+    "AGAIN",
+    "ALREADY",
+    "ALMOST",
+    "ENOUGH",
+    "INSTEAD",
+    "MEANWHILE",
+    "HOWEVER",
+    "BECAUSE",
+    "ALTHOUGH",
+    "WHATEVER",
+    "EVERYTHING",
+    "ANYTHING",
+    "SOMETHING",
+    "OOH",
+    "AAH",
+    "OOPS",
+    "WOW",
+    "HOORAY",
+    "HALLELUJAH",
+    "AMEN",
+    "OKAY",
+    "YEAH",
+    "HUH",
+    "HMM"
+  );
+
+  private static final Set<String> LEADING_FRAGMENT_WORDS = Set.of(
+    "JUST",
+    "THAT",
+    "THIS",
+    "THESE",
+    "THOSE",
+    "WHEN",
+    "WHERE",
+    "WHILE",
+    "WHY",
+    "HOW",
+    "IF",
+    "WHAT",
+    "THEN",
+    "THERE",
+    "HERE"
+  );
+
+  private static final Set<String> LEADING_CONJUNCTIONS = Set.of(
+    "AND",
+    "BUT",
+    "OR",
+    "NOR",
+    "SO",
+    "YET",
+    "FOR"
+  );
+
+  private static final Set<String> ORDINAL_WORDS = Set.of(
+    "FIRST",
+    "SECOND",
+    "THIRD",
+    "FOURTH",
+    "FIFTH",
+    "SIXTH",
+    "SEVENTH",
+    "EIGHTH",
+    "NINTH",
+    "TENTH",
+    "ELEVENTH",
+    "TWELFTH"
   );
 
   public static Set<String> load(ParserSessionStore session) {
@@ -336,12 +530,17 @@ public class CharacterExtractor {
       }
     }
 
+    Map<String, Integer> bareSpeakers = new HashMap<>();
+
     for (int i = 0; i < norm.size(); i++) {
       String line = norm.get(i);
       boolean wrapped = PageFurnitureDetector.wrapped(line);
       String effective = wrapped
         ? TextNormalizer.norm(PageFurnitureDetector.unwrap(line))
         : line;
+      if (!(wrapped && line.contains("reason=\"repeated_header_footer\""))) {
+        recordBareSpeaker(bareSpeakers, effective, norm, i);
+      }
 
       if (wrapped) {
         furnitureTexts.add(effective.toUpperCase());
@@ -355,6 +554,7 @@ public class CharacterExtractor {
       } else if (
         headerPrefixLine(line, headerPrefixes) ||
         StageDetector.skip(line) ||
+        licensingNotice(line) ||
         (StageDetector.junk(line) &&
           !heading(line) &&
           castListRole(line).isEmpty())
@@ -369,7 +569,14 @@ public class CharacterExtractor {
     Set<String> chars = keep(counts);
     chars.removeIf(name -> furnitureVocab(name, counts, furnitureTexts));
     chars.addAll(keepHeadingNames(headingUse));
+    Set<String> bare = keepBareSpeakers(bareSpeakers);
+    bare.removeAll(authorBylineNames(norm));
+    chars.addAll(bare);
     chars.removeAll(musicLyricNames(norm, chars));
+    chars.removeAll(truncatedFirstWords(chars));
+    chars.removeAll(shortFragmentVariants(chars));
+    chars.removeAll(titleHeaderNames(furnitureTexts));
+    chars.removeAll(vocativeOnlyRoles(norm, chars));
 
     Map<String, Integer> usage = garbleUsage(text);
     for (int pass = 0; pass < 6; pass++) {
@@ -379,6 +586,13 @@ public class CharacterExtractor {
       }
       chars.removeAll(garbles);
     }
+    Set<String> charsSnapshot = new HashSet<>(chars);
+    chars.removeIf(c -> {
+      String n = digitNormalized(c);
+      return !n.equals(c) && charsSnapshot.contains(n);
+    });
+
+    chars = collapseOcrVariants(chars, usage);
 
     return chars;
   }
@@ -555,6 +769,16 @@ public class CharacterExtractor {
         }
         continue;
       }
+      String deDigit = digitNormalized(garble);
+      if (!deDigit.equals(garble) && cleanCanonical.contains(deDigit)) {
+        aliases.put(garble, deDigit);
+        continue;
+      }
+      String conf = confusableCanonical(garble, cleanCanonical, headingUse);
+      if (!conf.isEmpty()) {
+        aliases.put(garble, conf);
+        continue;
+      }
 
       String match = uniqueGarbleTarget(
         garble,
@@ -654,6 +878,146 @@ public class CharacterExtractor {
     return space > 0 && name.substring(space + 1).equals(word);
   }
 
+  private static String digitNormalized(String name) {
+    String n = TextNormalizer.cleanName(name);
+    StringBuilder sb = new StringBuilder(n.length());
+    for (int i = 0; i < n.length(); i++) {
+      char c = n.charAt(i);
+      if (
+        Character.isDigit(c) &&
+        i > 0 &&
+        i < n.length() - 1 &&
+        Character.isLetter(n.charAt(i - 1)) &&
+        Character.isLetter(n.charAt(i + 1))
+      ) {
+        switch (c) {
+          case '1':
+            c = 'I';
+            break;
+          case '0':
+            c = 'O';
+            break;
+          case '5':
+            c = 'S';
+            break;
+          case '8':
+            c = 'B';
+            break;
+          default:
+            break;
+        }
+      }
+      sb.append(c);
+    }
+    return sb.toString();
+  }
+
+  private static final Set<String> OCR_CONFUSABLE = Set.of(
+    "1I",
+    "1L",
+    "1T",
+    "IL",
+    "IT",
+    "IJ",
+    "JT",
+    "LT",
+    "0O",
+    "0Q",
+    "OQ",
+    "5S",
+    "8B",
+    "6G",
+    "2Z",
+    "0D",
+    "8R"
+  );
+
+  private static String dedupAdjacent(String s) {
+    StringBuilder b = new StringBuilder(s.length());
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (b.length() == 0 || b.charAt(b.length() - 1) != c) {
+        b.append(c);
+      }
+    }
+    return b.toString();
+  }
+
+  private static boolean confusableChar(char a, char b) {
+    if (a == b) {
+      return true;
+    }
+    String key = a < b ? ("" + a + b) : ("" + b + a);
+    return OCR_CONFUSABLE.contains(key);
+  }
+
+  private static boolean confusableVariant(String a, String b) {
+    a = digitNormalized(TextNormalizer.cleanName(a));
+    b = digitNormalized(TextNormalizer.cleanName(b));
+    if (a.equals(b) || a.length() < 4) {
+      return false;
+    }
+    String ca = digitNormalized(compactName(a));
+    String cb = digitNormalized(compactName(b));
+    if (ca.length() < 3 || cb.length() < 3) {
+      return false;
+    }
+    if (ca.equals(cb) || dedupAdjacent(ca).equals(dedupAdjacent(cb))) {
+      return true;
+    }
+    if (ca.length() != cb.length()) {
+      return false;
+    }
+    int diff = 0;
+    for (int i = 0; i < ca.length(); i++) {
+      if (ca.charAt(i) != cb.charAt(i)) {
+        if (!confusableChar(ca.charAt(i), cb.charAt(i)) || ++diff > 2) {
+          return false;
+        }
+      }
+    }
+    return diff >= 1;
+  }
+
+  private static String confusableCanonical(
+    String name,
+    Set<String> canonical,
+    Map<String, Integer> usage
+  ) {
+    String clean = TextNormalizer.cleanName(name);
+    int mine = usage.getOrDefault(clean, 0);
+    String best = "";
+    int bestUse = mine;
+    for (String c : canonical) {
+      if (c.equals(clean)) {
+        continue;
+      }
+      int cu = usage.getOrDefault(c, 0);
+      if (cu > bestUse && confusableVariant(clean, c)) {
+        best = c;
+        bestUse = cu;
+      }
+    }
+    return best;
+  }
+
+  private static Set<String> collapseOcrVariants(
+    Set<String> chars,
+    Map<String, Integer> usage
+  ) {
+    Set<String> out = new LinkedHashSet<>(chars);
+    Set<String> removed = new HashSet<>();
+    for (String x : chars) {
+      if (
+        !confusableCanonical(x, chars, usage).isEmpty() && !removed.contains(x)
+      ) {
+        removed.add(x);
+      }
+    }
+    out.removeAll(removed);
+    return out;
+  }
+
   private static boolean garbleOf(String garble, String name) {
     if (
       garble.isEmpty() ||
@@ -688,6 +1052,174 @@ public class CharacterExtractor {
   }
 
   private static final int HEADING_USE_MIN = 2;
+  private static final int BARE_SPEAKER_MIN = 3;
+
+  private static void recordBareSpeaker(
+    Map<String, Integer> tally,
+    String effective,
+    List<String> lines,
+    int i
+  ) {
+    if (looseSpeakerCut(effective) >= 0) {
+      return; 
+    }
+    String name = TextNormalizer.cleanName(effective);
+    if (name.isEmpty() || tooManyWords(name) || !looseHeadingShape(effective)) {
+      return;
+    }
+    if (!headerOrFooter(name)) {
+      return;
+    }
+
+    if (
+      BAD_HEADINGS.contains(name) ||
+      BAD_SHORT_LINES.contains(name) ||
+      articleOnly(name) ||
+      badPhrase(name) ||
+      authorOrPublisher(name) ||
+      bareNumberOrShort(name) ||
+      name.startsWith("ENTER ") ||
+      name.startsWith("EXIT ")
+    ) {
+      return;
+    }
+    int sp = name.indexOf(' ');
+    if (sp > 0) {
+      String first = name.substring(0, sp);
+      if (first.equals("THE") || first.equals("A") || first.equals("AN")) {
+        String rest = name.substring(sp + 1).trim();
+        if (!roleName(rest) && !roleWord(rest) && !functionRole(rest)) {
+          return;
+        }
+      }
+    }
+    String[] toks = name.split(RegexTerms.WHITESPACE);
+    if (toks.length >= 2) {
+      int shortToks = 0;
+      for (String t : toks) {
+        if (t.length() <= 1) {
+          shortToks++;
+        }
+      }
+      if (shortToks * 2 >= toks.length) {
+        return;
+      }
+    }
+    if (!nextIsDialogue(lines, i)) {
+      return;
+    }
+    tally.merge(name, 1, Integer::sum);
+  }
+
+  private static final java.util.regex.Pattern AUTHOR_BYLINE =
+    java.util.regex.Pattern.compile(
+      "(?i)^\\s*(?:music and lyrics by|music by|lyrics by|book by|words by|" +
+        "written by|adapted by|conceived by|a play by|play by)\\s+(.+)$"
+    );
+
+  private static Set<String> authorBylineNames(List<String> lines) {
+    Set<String> names = new HashSet<>();
+    for (String line : lines) {
+      java.util.regex.Matcher m = AUTHOR_BYLINE.matcher(
+        TextNormalizer.norm(line)
+      );
+      if (!m.find()) {
+        continue;
+      }
+      for (String part : m.group(1).split("(?i)\\s*(?:&|,| and )\\s*")) {
+        String name = TextNormalizer.cleanName(part);
+        if (!name.isEmpty() && name.split(RegexTerms.WHITESPACE).length <= 4) {
+          names.add(name);
+        }
+      }
+    }
+    return names;
+  }
+
+  private static final java.util.regex.Pattern TITLE_HEADER =
+    java.util.regex.Pattern.compile("\\bTHE\\s+([A-Z][A-Z .'\\-]{2,38})$");
+
+  private static Set<String> titleHeaderNames(List<String> furnitureTexts) {
+    Set<String> out = new HashSet<>();
+    for (String f : furnitureTexts) {
+      java.util.regex.Matcher m = TITLE_HEADER.matcher(f.trim());
+      if (!m.find()) {
+        continue;
+      }
+      String title = TextNormalizer.cleanName(m.group(1));
+      if (!title.isEmpty() && !roleWord(title) && !functionRole(title)) {
+        out.add(title);
+      }
+    }
+    return out;
+  }
+
+  private static Set<String> shortFragmentVariants(Set<String> chars) {
+    Set<String> drop = new HashSet<>();
+    for (String x : chars) {
+      String[] xt = TextNormalizer.cleanName(x).split(RegexTerms.WHITESPACE);
+      if (xt.length < 2 || xt[xt.length - 1].length() > 2) {
+        continue;
+      }
+      String xLast = xt[xt.length - 1];
+      String xHead = join(xt, 0, xt.length - 1);
+      for (String y : chars) {
+        if (y.equals(x)) {
+          continue;
+        }
+        String[] yt = TextNormalizer.cleanName(y).split(RegexTerms.WHITESPACE);
+        if (yt.length != xt.length) {
+          continue;
+        }
+        String yLast = yt[yt.length - 1];
+        if (
+          join(yt, 0, yt.length - 1).equals(xHead) &&
+          yLast.length() > xLast.length() &&
+          yLast.startsWith(xLast)
+        ) {
+          drop.add(x);
+          break;
+        }
+      }
+    }
+    return drop;
+  }
+
+  private static Set<String> truncatedFirstWords(Set<String> chars) {
+    Set<String> firstWords = new HashSet<>();
+    for (String c : chars) {
+      String first = TextNormalizer.cleanName(c).split(
+        RegexTerms.WHITESPACE
+      )[0];
+      firstWords.add(first);
+    }
+    Set<String> drop = new HashSet<>();
+    for (String c : chars) {
+      String cl = TextNormalizer.cleanName(c);
+      if (cl.contains(" ") || cl.length() < 3) {
+        continue;
+      }
+      for (String fw : firstWords) {
+        if (
+          fw.length() == cl.length() + 1 && fw.startsWith(cl) && !fw.equals(cl)
+        ) {
+          drop.add(c);
+          break;
+        }
+      }
+    }
+    return drop;
+  }
+
+  private static Set<String> keepBareSpeakers(Map<String, Integer> tally) {
+    Set<String> out = new HashSet<>();
+    for (Map.Entry<String, Integer> e : tally.entrySet()) {
+      if (e.getValue() >= BARE_SPEAKER_MIN) {
+        out.add(e.getKey());
+      }
+    }
+    return out;
+  }
 
   private static void addHeadingUse(Map<String, Integer> use, String line) {
     String cleaned = TextNormalizer.norm(line);
@@ -731,10 +1263,19 @@ public class CharacterExtractor {
     return -1;
   }
 
+  private static boolean licensingNotice(String line) {
+    String t = TextNormalizer.norm(line).toLowerCase();
+    return (
+      t.contains("hereby warned") ||
+      (t.contains("professionals") && t.contains("amateurs"))
+    );
+  }
+
   private static boolean looseHeadingShape(String raw) {
     String name = TextNormalizer.rawHeadingName(raw);
     return (
       !name.isEmpty() &&
+      Character.isLetterOrDigit(name.charAt(0)) &&
       TextNormalizer.hasLetter(name) &&
       name.length() <= MAX_NAME_LENGTH &&
       !tooManyWords(name) &&
@@ -939,6 +1480,77 @@ public class CharacterExtractor {
     return confirmed;
   }
 
+  private static Set<String> vocativeOnlyRoles(
+    List<String> norm,
+    Set<String> chars
+  ) {
+    Set<String> drop = new HashSet<>();
+    if (norm == null || norm.isEmpty() || chars == null || chars.isEmpty()) {
+      return drop;
+    }
+    Set<String> candidates = new HashSet<>();
+    for (String c : chars) {
+      String clean = TextNormalizer.cleanName(c);
+      if (VOCATIVE_ROLE_WORDS.contains(clean)) {
+        candidates.add(clean);
+      }
+    }
+    if (candidates.isEmpty()) {
+      return drop;
+    }
+    Set<String> explicit = new HashSet<>();
+    for (String l : norm) {
+      String eff = PageFurnitureDetector.wrapped(l)
+        ? TextNormalizer.norm(PageFurnitureDetector.unwrap(l))
+        : l;
+      collectExplicitRoleHeadings(eff, candidates, explicit);
+    }
+    for (String c : candidates) {
+      if (!explicit.contains(c)) {
+        drop.add(c);
+      }
+    }
+    return drop;
+  }
+
+  private static void collectExplicitRoleHeadings(
+    String line,
+    Set<String> candidates,
+    Set<String> explicit
+  ) {
+    String s = line == null ? "" : line.strip();
+    if (s.isEmpty()) {
+      return;
+    }
+    int colon = s.indexOf(':');
+    if (colon > 0 && colon <= 40) {
+      for (String tok : s.substring(0, colon).split(RegexTerms.WHITESPACE)) {
+        String t = TextNormalizer.cleanName(tok);
+        if (candidates.contains(t)) {
+          explicit.add(t);
+        }
+      }
+      return;
+    }
+    boolean hasLower = false;
+    for (int i = 0; i < s.length(); i++) {
+      if (Character.isLowerCase(s.charAt(i))) {
+        hasLower = true;
+        break;
+      }
+    }
+    String[] w = s.split(RegexTerms.WHITESPACE);
+    if (hasLower || w.length > 4 || s.length() > 40) {
+      return;
+    }
+    for (String tok : w) {
+      String t = TextNormalizer.cleanName(tok);
+      if (candidates.contains(t)) {
+        explicit.add(t);
+      }
+    }
+  }
+
   private static void addFromLine(Map<String, Integer> counts, String line) {
     String cleaned = TextNormalizer.norm(line);
 
@@ -1098,6 +1710,24 @@ public class CharacterExtractor {
       return false;
     }
 
+    if (
+      clean.split(RegexTerms.WHITESPACE).length >= 2 &&
+      !articlePrefixed &&
+      !hasNumber
+    ) {
+      String deNumbered = clean
+        .replaceAll(RegexTerms.NUMBER_OR_ORDINAL_WORD, " ")
+        .replaceAll(RegexTerms.WHITESPACE, " ")
+        .trim();
+      if (
+        !deNumbered.equals(clean) &&
+        !roleWord(deNumbered) &&
+        !functionRole(deNumbered)
+      ) {
+        return false;
+      }
+    }
+
     return containsOnlyNameCharacters(raw);
   }
 
@@ -1192,6 +1822,52 @@ public class CharacterExtractor {
     }
 
     String[] w = n.split(RegexTerms.WHITESPACE);
+    if (n.contains("THE MUSICAL") || n.contains("THE PLAY")) {
+      return true;
+    }
+    if (n.matches(".*([A-Z])\\1\\1.*")) {
+      return true;
+    }
+    if (w.length >= 2 && LEADING_CONJUNCTIONS.contains(w[0])) {
+      return true;
+    }
+    if (w.length >= 2 && LEADING_FRAGMENT_WORDS.contains(w[0])) {
+      return true;
+    }
+    for (String word : w) {
+      if (
+        word.endsWith("N'T") ||
+        word.matches("(IT|THAT|THERE|HERE|HE|SHE|WHAT|WHO|LET|THIS)'S")
+      ) {
+        return true;
+      }
+    }
+    if (n.matches(".*([A-Z])\\1\\1.*")) {
+      return true;
+    }
+    for (int i = 0; i < w.length - 1; i++) {
+      if (w[i].endsWith(".")) {
+        String stem = w[i].substring(0, w[i].length() - 1);
+        if (stem.length() >= 2 && !HONORIFICS.contains(stem)) {
+          return true;
+        }
+      }
+    }
+    if (w.length == 1 && NON_NAME_WORDS.contains(w[0])) {
+      return true;
+    }
+    for (String word : w) {
+      if (word.matches("[A-Z][0-9]")) {
+        return true;
+      }
+    }
+    if (
+      w.length >= 2 &&
+      (EDGE_STOPWORDS.contains(w[0]) ||
+        EDGE_STOPWORDS.contains(w[w.length - 1]))
+    ) {
+      return true;
+    }
 
     if (
       w.length >= 2 &&
@@ -1245,6 +1921,7 @@ public class CharacterExtractor {
   private static boolean validNameShape(String name) {
     return (
       !name.isEmpty() &&
+      Character.isLetterOrDigit(name.charAt(0)) &&
       TextNormalizer.hasLetter(name) &&
       name.length() <= MAX_NAME_LENGTH &&
       !BAD_HEADINGS.contains(name) &&
@@ -1355,10 +2032,13 @@ public class CharacterExtractor {
       return false;
     }
     String only = w[0];
+    String up = only.toUpperCase();
     return (
       only.length() <= 2 ||
-      BARE_NUMBER_WORDS.contains(only.toUpperCase()) ||
-      only.matches("\\d+")
+      BARE_NUMBER_WORDS.contains(up) ||
+      ORDINAL_WORDS.contains(up) ||
+      only.matches("\\d+") ||
+      up.matches("\\d{1,3}(ST|ND|RD|TH)")
     );
   }
 
@@ -1632,6 +2312,31 @@ public class CharacterExtractor {
     return cleaned;
   }
 
+  private static final java.util.regex.Pattern FILENAME_BYLINE =
+    java.util.regex.Pattern.compile("(?i)\\bby\\b\\s+(.+)$");
+  public static Set<String> removeBylineAuthors(
+    Set<String> chars,
+    String filename
+  ) {
+    if (chars == null || filename == null) {
+      return chars;
+    }
+    String base = filename.replaceAll(
+      "(?i)\\.(pdf|txt|png|jpe?g|heic|webp|tiff?)$",
+      ""
+    );
+    java.util.regex.Matcher m = FILENAME_BYLINE.matcher(base);
+    if (!m.find()) {
+      return chars;
+    }
+    String author = TextNormalizer.cleanName(m.group(1));
+    if (author.isEmpty() || author.split(RegexTerms.WHITESPACE).length < 2) {
+      return chars;
+    }
+    chars.removeIf(c -> TextNormalizer.cleanName(c).equals(author));
+    return chars;
+  }
+
   public static Set<String> expand(Set<String> names) {
     Set<String> result = new LinkedHashSet<>();
     if (names == null) {
@@ -1725,3 +2430,4 @@ public class CharacterExtractor {
     return name.replaceAll(RegexTerms.NON_ALNUM_UPPER, "");
   }
 }
+
