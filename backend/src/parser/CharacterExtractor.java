@@ -608,7 +608,9 @@ public class CharacterExtractor {
     }
 
     java.util.regex.Pattern word = java.util.regex.Pattern.compile(
-      "\\b" + java.util.regex.Pattern.quote(clean) + "\\b"
+      RegexTerms.WORD_BOUNDARY +
+        java.util.regex.Pattern.quote(clean) +
+        RegexTerms.WORD_BOUNDARY
     );
 
     int hits = 0;
@@ -621,9 +623,7 @@ public class CharacterExtractor {
   }
 
   private static final java.util.regex.Pattern HEADER_NUMBER_LINE =
-    java.util.regex.Pattern.compile(
-      "^([A-Z][A-Z .'\\-]{2,40}?)\\s+(\\d{1,4})$"
-    );
+    java.util.regex.Pattern.compile(RegexTerms.HEADER_NUMBER_LINE);
 
   private static Set<String> headerPrefixes(String text) {
     Map<String, Set<Integer>> numbersByPrefix = new HashMap<>();
@@ -1112,10 +1112,7 @@ public class CharacterExtractor {
   }
 
   private static final java.util.regex.Pattern AUTHOR_BYLINE =
-    java.util.regex.Pattern.compile(
-      "(?i)^\\s*(?:music and lyrics by|music by|lyrics by|book by|words by|" +
-        "written by|adapted by|conceived by|a play by|play by)\\s+(.+)$"
-    );
+    java.util.regex.Pattern.compile(RegexTerms.AUTHOR_BYLINE_LINE);
 
   private static Set<String> authorBylineNames(List<String> lines) {
     Set<String> names = new HashSet<>();
@@ -1126,7 +1123,7 @@ public class CharacterExtractor {
       if (!m.find()) {
         continue;
       }
-      for (String part : m.group(1).split("(?i)\\s*(?:&|,| and )\\s*")) {
+      for (String part : m.group(1).split(RegexTerms.BYLINE_NAME_SEPARATOR)) {
         String name = TextNormalizer.cleanName(part);
         if (!name.isEmpty() && name.split(RegexTerms.WHITESPACE).length <= 4) {
           names.add(name);
@@ -1137,7 +1134,7 @@ public class CharacterExtractor {
   }
 
   private static final java.util.regex.Pattern TITLE_HEADER =
-    java.util.regex.Pattern.compile("\\bTHE\\s+([A-Z][A-Z .'\\-]{2,38})$");
+    java.util.regex.Pattern.compile(RegexTerms.TITLE_HEADER);
 
   private static Set<String> titleHeaderNames(List<String> furnitureTexts) {
     Set<String> out = new HashSet<>();
@@ -1616,7 +1613,7 @@ public class CharacterExtractor {
   static String castDashRole(String line) {
     String cleaned = TextNormalizer.norm(line);
     java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-      "^([A-Z][A-Z .,'\\-]{1,34}?)\\s+[-–—]\\s+\\S.{4,}$"
+      RegexTerms.CAST_DASH_ROLE
     ).matcher(cleaned);
     if (!m.find()) {
       return "";
@@ -1634,7 +1631,7 @@ public class CharacterExtractor {
   static String castListRole(String line) {
     String cleaned = TextNormalizer.norm(line);
     java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-      "^([A-Z][A-Z .,'\\-]{1,34}?)[,.]\\s+\\S.*[A-Z][a-z]+[ .]+[A-Z][a-z]+\\.?$"
+      RegexTerms.CAST_LIST_ROLE
     ).matcher(cleaned);
     if (!m.find()) {
       return "";
@@ -1825,7 +1822,7 @@ public class CharacterExtractor {
     if (n.contains("THE MUSICAL") || n.contains("THE PLAY")) {
       return true;
     }
-    if (n.matches(".*([A-Z])\\1\\1.*")) {
+    if (n.matches(RegexTerms.STRETCHED_LETTER)) {
       return true;
     }
     if (w.length >= 2 && LEADING_CONJUNCTIONS.contains(w[0])) {
@@ -1837,13 +1834,10 @@ public class CharacterExtractor {
     for (String word : w) {
       if (
         word.endsWith("N'T") ||
-        word.matches("(IT|THAT|THERE|HERE|HE|SHE|WHAT|WHO|LET|THIS)'S")
+        word.matches(RegexTerms.CONTRACTION_PRONOUN_SUFFIX)
       ) {
         return true;
       }
-    }
-    if (n.matches(".*([A-Z])\\1\\1.*")) {
-      return true;
     }
     for (int i = 0; i < w.length - 1; i++) {
       if (w[i].endsWith(".")) {
@@ -1857,7 +1851,7 @@ public class CharacterExtractor {
       return true;
     }
     for (String word : w) {
-      if (word.matches("[A-Z][0-9]")) {
+      if (word.matches(RegexTerms.LETTER_DIGIT_TOKEN)) {
         return true;
       }
     }
@@ -2037,8 +2031,8 @@ public class CharacterExtractor {
       only.length() <= 2 ||
       BARE_NUMBER_WORDS.contains(up) ||
       ORDINAL_WORDS.contains(up) ||
-      only.matches("\\d+") ||
-      up.matches("\\d{1,3}(ST|ND|RD|TH)")
+      only.matches(RegexTerms.DIGITS_ONLY) ||
+      up.matches(RegexTerms.ORDINAL_DIGIT_SUFFIX)
     );
   }
 
@@ -2313,7 +2307,7 @@ public class CharacterExtractor {
   }
 
   private static final java.util.regex.Pattern FILENAME_BYLINE =
-    java.util.regex.Pattern.compile("(?i)\\bby\\b\\s+(.+)$");
+    java.util.regex.Pattern.compile(RegexTerms.FILENAME_BYLINE);
   public static Set<String> removeBylineAuthors(
     Set<String> chars,
     String filename

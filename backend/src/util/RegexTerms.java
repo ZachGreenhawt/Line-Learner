@@ -226,6 +226,26 @@ public final class RegexTerms {
   public static final String ALL_CAPS_THREE_WORDS =
     "^[A-Z]+\\s+[A-Z]+\\s+[A-Z]+$";
   public static final String NON_ALNUM_UPPER = "[^A-Z0-9]";
+  public static final String WORD_BOUNDARY = "\\b";
+  public static final String HEADER_NUMBER_LINE =
+    "^([A-Z][A-Z .'\\-]{2,40}?)\\s+(\\d{1,4})$";
+  public static final String AUTHOR_BYLINE_LINE =
+    "(?i)^\\s*(?:music and lyrics by|music by|lyrics by|book by|words by|" +
+    "written by|adapted by|conceived by|a play by|play by)\\s+(.+)$";
+  public static final String BYLINE_NAME_SEPARATOR =
+    "(?i)\\s*(?:&|,| and )\\s*";
+  public static final String TITLE_HEADER =
+    "\\bTHE\\s+([A-Z][A-Z .'\\-]{2,38})$";
+  public static final String CAST_DASH_ROLE =
+    "^([A-Z][A-Z .,'\\-]{1,34}?)\\s+[-–—]\\s+\\S.{4,}$";
+  public static final String CAST_LIST_ROLE =
+    "^([A-Z][A-Z .,'\\-]{1,34}?)[,.]\\s+\\S.*[A-Z][a-z]+[ .]+[A-Z][a-z]+\\.?$";
+  public static final String FILENAME_BYLINE = "(?i)\\bby\\b\\s+(.+)$";
+  public static final String STRETCHED_LETTER = ".*([A-Z])\\1\\1.*";
+  public static final String CONTRACTION_PRONOUN_SUFFIX =
+    "(IT|THAT|THERE|HERE|HE|SHE|WHAT|WHO|LET|THIS)'S";
+  public static final String LETTER_DIGIT_TOKEN = "[A-Z][0-9]";
+  public static final String ORDINAL_DIGIT_SUFFIX = "\\d{1,3}(ST|ND|RD|TH)";
 
   // Shared dialogue
   public static final String STARTS_WITH_QUOTE = "^[\"'“‘].*";
@@ -461,6 +481,20 @@ public final class RegexTerms {
     "(?i).*\\.(COM|CO\\.UK|ORG|NET)\\b.*";
   public static final String AFTER_LAST_SPACE = ".*\\s+";
   public static final String BEFORE_FIRST_SPACE = "\\s+.*";
+  public static final String SPACE = " ";
+  public static final String GLYPH_PIPE_BRACKET_PRONOUN =
+    "(^|[\\s(\"'“‘])[|\\[](?=\\s[a-z])";
+  public static final String DIGIT_ONE_PRONOUN = "(^|[.!?…)]\\s)1(?=\\s[a-z])";
+  public static final String FURNITURE_CANDIDATE_TAG =
+    "</?FURNITURE_CANDIDATE[^>]*>";
+  public static final String FURNITURE_CANDIDATE_OPEN_TAG =
+    "<FURNITURE_CANDIDATE[^>]*>";
+  public static final String SLASH_OR_WHITESPACE = "\\s*/\\s*|\\s+";
+  public static final String DOTTED_LEADER_WORD =
+    "[A-Za-z']+\\.{1,5}[.,!?;:'\"]*";
+  public static final String DOTTED_LEADER_LONG = ".*\\.{6,}.*";
+  public static final String LOWER_DOT_RUN = "[a-z.]+";
+  public static final String ZERO_DOT_LEADER = "[0oO]{2,5}\\.{3,}";
 
   // OCR
 
@@ -528,6 +562,36 @@ public final class RegexTerms {
     "(?i)^[\\[(]?\\s*(the\\s+)?(music|song)\\s+(out|ends?|stops?|fades?|finishes?)\\b.*";
   public static final String SONG_REGION_BOUNDARY =
     "(?i)^(act|scene|episode|intermission|end of)\\b.*";
+
+  // TesseractCli
+
+  public static final String OSD_ROTATE = "Rotate:\\s*(\\d+)";
+  public static final String OSD_ORIENT_CONF =
+    "Orientation confidence:\\s*([0-9]+(?:\\.[0-9]+)?)";
+
+  // SpeakerBlockBuilder
+
+  public static final String SCENE_NUMBER_LINE = "^scene\\s+[0-9ivx]+\\b.*";
+
+  // ScriptParser
+
+  public static final String DATE_MONTH_DAY_YEAR =
+    "(?i)^[A-Z][a-z]+\\s+\\d{1,2},\\s+\\d{4}$";
+  public static final String DATE_SLASH_PAGE =
+    "(?i)^\\d{1,2}/\\d{1,2}\\s*/?\\d{2,4}\\b.*\\bpg\\.?\\s*\\d+.*$";
+
+  // HybridTextExtraction
+
+  public static final String NON_LOWER_APOS_RUN = "[^a-z']+";
+
+  // NativeColumnTextExtractor
+
+  public static final String CAST_PAGE_HEADER =
+    "(?im)^\\s*(characters|cast of characters|cast|dramatis personae)\\b.{0,20}$";
+  public static final String FRONT_MATTER_PAGE =
+    "(?i)\\b(copyright|all rights reserved|isbn|premiere[d]?|directed by|" +
+    "produced by|published|playwright|theatre company|artistic director|" +
+    "characters|cast of characters|dramatis personae|acknowledg)\\b";
 
   private RegexTerms() {}
 

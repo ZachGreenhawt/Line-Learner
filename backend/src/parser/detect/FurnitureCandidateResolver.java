@@ -13,7 +13,7 @@ public class FurnitureCandidateResolver {
       return text == null ? "" : text;
     }
     Set<String> names = names(chars);
-    String[] raw = text.split("\n", -1);
+    String[] raw = text.split(util.RegexTerms.NEWLINE_CHAR, -1);
     for (int i = 0; i < raw.length; i++) {
       String normalized = TextNormalizer.norm(raw[i]);
       if (!PageFurnitureDetector.wrapped(normalized)) {

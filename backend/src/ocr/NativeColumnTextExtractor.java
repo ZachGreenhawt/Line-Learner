@@ -179,16 +179,10 @@ class NativeColumnTextExtractor {
   }
 
   private static final java.util.regex.Pattern CAST_PAGE =
-    java.util.regex.Pattern.compile(
-      "(?im)^\\s*(characters|cast of characters|cast|dramatis personae)\\b.{0,20}$"
-    );
+    java.util.regex.Pattern.compile(util.RegexTerms.CAST_PAGE_HEADER);
 
   private static final java.util.regex.Pattern FRONT_MATTER_PAGE =
-    java.util.regex.Pattern.compile(
-      "(?i)\\b(copyright|all rights reserved|isbn|premiere[d]?|directed by|" +
-        "produced by|published|playwright|theatre company|artistic director|" +
-        "characters|cast of characters|dramatis personae|acknowledg)\\b"
-    );
+    java.util.regex.Pattern.compile(util.RegexTerms.FRONT_MATTER_PAGE);
 
   private static Extracted columnBands(PDDocument document, int pageNumber) {
     try {

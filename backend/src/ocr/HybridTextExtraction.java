@@ -221,7 +221,7 @@ public class HybridTextExtraction {
     String lower = text.toLowerCase(Locale.ROOT);
     int total = 0;
     int common = 0;
-    for (String token : lower.split("[^a-z']+")) {
+    for (String token : lower.split(util.RegexTerms.NON_LOWER_APOS_RUN)) {
       if (token.isEmpty()) {
         continue;
       }

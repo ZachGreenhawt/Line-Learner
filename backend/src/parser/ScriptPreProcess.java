@@ -107,7 +107,7 @@ public class ScriptPreProcess {
   }
 
   private static String unwrapFurniture(String line) {
-    return line.replaceAll("</?FURNITURE_CANDIDATE[^>]*>", "").trim();
+    return line.replaceAll(RegexTerms.FURNITURE_CANDIDATE_TAG, "").trim();
   }
 
   private static boolean castRegionHeader(String line) {
@@ -161,7 +161,7 @@ public class ScriptPreProcess {
       return false;
     }
 
-    String[] tokens = line.split("\\s*/\\s*|\\s+");
+    String[] tokens = line.split(RegexTerms.SLASH_OR_WHITESPACE);
     if (tokens.length < 1 || tokens.length > 6) {
       return false;
     }
@@ -184,16 +184,16 @@ public class ScriptPreProcess {
 
   private static boolean dottedLeader(String line) {
     if (line == null || line.length() < 8) return false;
-    for (String token : line.split(" ")) {
-      if (token.matches("[A-Za-z']+\\.{1,5}[.,!?;:'\"]*")) continue;
-      if (token.matches(".*\\.{6,}.*")) return true;
+    for (String token : line.split(RegexTerms.SPACE)) {
+      if (token.matches(RegexTerms.DOTTED_LEADER_WORD)) continue;
+      if (token.matches(RegexTerms.DOTTED_LEADER_LONG)) return true;
       if (
         token.length() >= 12 &&
-        token.matches("[a-z.]+") &&
+        token.matches(RegexTerms.LOWER_DOT_RUN) &&
         token.chars().filter(c -> c == '.').count() >= 2
       ) return true;
-      if (token.matches("[0oO]{2,5}\\.{3,}")) return true;
-      if (token.length() >= 20 && token.matches("[a-z.]+")) {
+      if (token.matches(RegexTerms.ZERO_DOT_LEADER)) return true;
+      if (token.length() >= 20 && token.matches(RegexTerms.LOWER_DOT_RUN)) {
         long distinct = token
           .chars()
           .filter(Character::isLetter)
@@ -302,9 +302,9 @@ public class ScriptPreProcess {
   }
 
   private static final java.util.regex.Pattern GLYPH_PRONOUN =
-    java.util.regex.Pattern.compile("(^|[\\s(\"'“‘])[|\\[](?=\\s[a-z])");
+    java.util.regex.Pattern.compile(RegexTerms.GLYPH_PIPE_BRACKET_PRONOUN);
   private static final java.util.regex.Pattern ONE_PRONOUN =
-    java.util.regex.Pattern.compile("(^|[.!?…)]\\s)1(?=\\s[a-z])");
+    java.util.regex.Pattern.compile(RegexTerms.DIGIT_ONE_PRONOUN);
 
   private static String restoreLonePronoun(String line) {
     String out = GLYPH_PRONOUN.matcher(line).replaceAll("$1I");

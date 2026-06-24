@@ -112,7 +112,7 @@ public class ScriptLoader {
     if (name == null || name.isBlank()) {
       return "current_script";
     }
-    return name.replaceFirst("\\.[^.]+$", "");
+    return name.replaceFirst(util.RegexTerms.EXTENSION_SUFFIX, "");
   }
 
   private static String sessionName(String name) {
@@ -288,7 +288,7 @@ public class ScriptLoader {
     }
 
     String prefix = key + "=";
-    for (String line : meta.split("\\R")) {
+    for (String line : meta.split(util.RegexTerms.LINE_BREAK)) {
       String trimmed = line.trim();
       if (trimmed.startsWith(prefix)) {
         return trimmed.substring(prefix.length()).trim();

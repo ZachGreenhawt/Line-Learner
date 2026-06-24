@@ -54,7 +54,7 @@ public class ParserSessionStore {
     ensureFolders();
 
     String body = text == null ? "" : text;
-    String[] lines = body.split("\n", -1);
+    String[] lines = body.split(util.RegexTerms.NEWLINE_CHAR, -1);
     StringBuilder sb = new StringBuilder("line,text\n");
     for (int i = 0; i < lines.length; i++) {
       sb.append(i + 1).append(',').append(csvCell(lines[i])).append('\n');

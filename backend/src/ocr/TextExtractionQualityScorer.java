@@ -427,7 +427,7 @@ public class TextExtractionQualityScorer {
       return text == null ? "" : text;
     }
     return text
-      .replaceAll("<FURNITURE_CANDIDATE[^>]*>", "")
+      .replaceAll(util.RegexTerms.FURNITURE_CANDIDATE_OPEN_TAG, "")
       .replace("</FURNITURE_CANDIDATE>", "")
       .replace("<STAGE_HINT>", "")
       .replace("</STAGE_HINT>", "");

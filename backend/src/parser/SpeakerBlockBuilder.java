@@ -472,11 +472,12 @@ public class SpeakerBlockBuilder {
       }
 
       Pattern pattern = Pattern.compile(
-        "\\b" +
+        RegexTerms.WORD_BOUNDARY +
           Pattern.quote(name) +
           "\\s+(" +
           RegexTerms.STAGE_ACTION +
-          ")\\b",
+          ")" +
+          RegexTerms.WORD_BOUNDARY,
         Pattern.CASE_INSENSITIVE
       );
 
@@ -995,7 +996,7 @@ public class SpeakerBlockBuilder {
     }
     return TextNormalizer.norm(line)
       .toLowerCase()
-      .matches("^scene\\s+[0-9ivx]+\\b.*");
+      .matches(RegexTerms.SCENE_NUMBER_LINE);
   }
 
   private static boolean majorStageTransition(String line) {
@@ -1007,7 +1008,7 @@ public class SpeakerBlockBuilder {
     String lower = cleaned.toLowerCase();
     return (
       StageDetector.entranceExit(cleaned) ||
-      lower.matches("^scene\\s+[0-9ivx]+\\b.*") ||
+      lower.matches(RegexTerms.SCENE_NUMBER_LINE) ||
       lower.contains("scene blacks out") ||
       lower.contains("scene fades out") ||
       lower.contains("lights fade") ||

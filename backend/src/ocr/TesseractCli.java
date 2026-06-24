@@ -33,10 +33,10 @@ public class TesseractCli {
   private static final long TIMEOUT_SECONDS = 60;
 
   private static final Pattern ROTATE_PATTERN = Pattern.compile(
-    "Rotate:\\s*(\\d+)"
+    util.RegexTerms.OSD_ROTATE
   );
   private static final Pattern ORIENT_CONF_PATTERN = Pattern.compile(
-    "Orientation confidence:\\s*([0-9]+(?:\\.[0-9]+)?)"
+    util.RegexTerms.OSD_ORIENT_CONF
   );
 
   private final String binary;
@@ -186,8 +186,8 @@ public class TesseractCli {
     int[] box = null;
     StringBuilder text = new StringBuilder();
 
-    for (String row : body.split("\n")) {
-      String[] f = row.split("\t", -1);
+    for (String row : body.split(util.RegexTerms.NEWLINE_CHAR)) {
+      String[] f = row.split(util.RegexTerms.TAB, -1);
       if (f.length < 12) {
         continue;
       }
@@ -330,7 +330,7 @@ public class TesseractCli {
     Integer rotate = null;
     Double confidence = null;
 
-    for (String line : report.split("\\R")) {
+    for (String line : report.split(util.RegexTerms.LINE_BREAK)) {
       Matcher r = ROTATE_PATTERN.matcher(line);
       if (r.find()) {
         try {

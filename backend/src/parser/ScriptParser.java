@@ -346,12 +346,10 @@ public class ScriptParser {
     if (FrontMatterDetector.is(t)) {
       return true;
     }
-    if (t.matches("(?i)^[A-Z][a-z]+\\s+\\d{1,2},\\s+\\d{4}$")) {
+    if (t.matches(RegexTerms.DATE_MONTH_DAY_YEAR)) {
       return true;
     }
-    if (
-      t.matches("(?i)^\\d{1,2}/\\d{1,2}\\s*/?\\d{2,4}\\b.*\\bpg\\.?\\s*\\d+.*$")
-    ) {
+    if (t.matches(RegexTerms.DATE_SLASH_PAGE)) {
       return true;
     }
     return false;
