@@ -1,13 +1,18 @@
 package ocr;
 
+import java.awt.geom.GeneralPath;
+import java.awt.geom.Rectangle2D;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDVectorFont;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.pdfbox.text.TextPosition;
 import parser.detect.StageHints;
@@ -90,12 +95,78 @@ class NativeColumnTextExtractor {
     return pages;
   }
 
+  private static final Map<String, Boolean> BLANK_GLYPH_CACHE = new HashMap<>();
+
+  private static String restoreFusedSpaces(
+    String fallback,
+    List<TextPosition> positions
+  ) {
+    if (positions == null || positions.isEmpty()) {
+      return fallback;
+    }
+    boolean any = false;
+    for (TextPosition t : positions) {
+      if (inklessLetterGlyph(t)) {
+        any = true;
+        break;
+      }
+    }
+    if (!any) {
+      return fallback;
+    }
+    StringBuilder out = new StringBuilder(positions.size());
+    for (TextPosition t : positions) {
+      String u = t.getUnicode();
+      if (u == null || u.isEmpty()) {
+        continue;
+      }
+      out.append(inklessLetterGlyph(t) ? " " : u);
+    }
+    return out.toString();
+  }
+
+  private static boolean inklessLetterGlyph(TextPosition t) {
+    String u = t.getUnicode();
+    if (
+      u == null || u.length() != 1 || !Character.isLetterOrDigit(u.charAt(0))
+    ) {
+      return false;
+    }
+    PDFont font = t.getFont();
+    int[] codes = t.getCharacterCodes();
+    if (!(font instanceof PDVectorFont) || codes == null || codes.length != 1) {
+      return false;
+    }
+    String key = font.getName() + "|" + codes[0];
+    Boolean cached = BLANK_GLYPH_CACHE.get(key);
+    if (cached != null) {
+      return cached;
+    }
+    boolean blank = false;
+    try {
+      GeneralPath path = ((PDVectorFont) font).getPath(codes[0]);
+      Rectangle2D bounds = path == null ? null : path.getBounds2D();
+      blank =
+        bounds == null || (bounds.getWidth() == 0 && bounds.getHeight() == 0);
+    } catch (Exception ignored) {
+      blank = false;
+    }
+    BLANK_GLYPH_CACHE.put(key, blank);
+    return blank;
+  }
+
   private static Extracted extract(
     PDDocument document,
     int pageNumber,
     boolean sortByPosition
   ) throws Exception {
-    PDFTextStripper stripper = new PDFTextStripper();
+    PDFTextStripper stripper = new PDFTextStripper() {
+      @Override
+      protected void writeString(String string, List<TextPosition> positions)
+        throws IOException {
+        super.writeString(restoreFusedSpaces(string, positions), positions);
+      }
+    };
     stripper.setSortByPosition(sortByPosition);
     stripper.setStartPage(pageNumber);
     stripper.setEndPage(pageNumber);
@@ -664,7 +735,7 @@ class NativeColumnTextExtractor {
           text.append(' ');
         }
       }
-      text.append(glyph.getUnicode());
+      text.append(inklessLetterGlyph(glyph) ? " " : glyph.getUnicode());
     }
 
     return new Span(
